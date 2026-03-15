@@ -4,14 +4,14 @@ declare(strict_types=1);
 namespace app\controller;
 
 use app\service\AutoGroupService;
+use app\service\LogService;
 use app\service\WxWorkCrypto;
 use app\service\WxWorkService;
-use think\facade\Log;
 use think\Request;
 use think\Response;
 
 /**
- * 企业微信回调控制器
+ * 企业微信回调控制器 - lity
  *
  * 路由：
  *   GET  /wxwork/callback  —— 企业微信 URL 接入验证
@@ -48,19 +48,27 @@ class WxWorkCallbackController
             $nonce    = $request->get('nonce', '');
             $echoStr  = $request->get('echostr', '');
 
-            Log::info('[Callback] URL 验证参数', [
-                'msg_signature' => $msgSig,
-                'timestamp'     => $ts,
-                'nonce'         => $nonce,
-                'echostr'       => $echoStr,
-                'all_params'    => $request->get(),
+            LogService::info([
+                'tag'     => 'Callback',
+                'message' => 'URL 验证参数',
+                'data'    => [
+                    'msg_signature' => $msgSig,
+                    'timestamp'     => $ts,
+                    'nonce'         => $nonce,
+                    'echostr'       => $echoStr,
+                    'all_params'    => $request->get(),
+                ],
             ]);
 
             $plainText = $this->crypto->verifyUrl($msgSig, $ts, $nonce, $echoStr);
 
             return response($plainText, 200, ['Content-Type' => 'text/plain']);
         } catch (\Throwable $e) {
-            Log::error('[Callback] URL 验证失败: ' . $e->getMessage());
+            LogService::error([
+                'tag'     => 'Callback',
+                'message' => 'URL 验证失败',
+                'data'    => ['error' => $e->getMessage()],
+            ]);
             return response('error', 403, ['Content-Type' => 'text/plain']);
         }
     }
@@ -81,8 +89,13 @@ class WxWorkCallbackController
             $event = $this->crypto->decryptMessage($msgSig, $ts, $nonce, $rawBody);
             $this->dispatchEvent($event);
         } catch (\Throwable $e) {
-            Log::error('[Callback] 事件处理异常: ' . $e->getMessage(), [
-                'body' => $rawBody,
+            LogService::error([
+                'tag'     => 'Callback',
+                'message' => '事件处理异常',
+                'data'    => [
+                    'error' => $e->getMessage(),
+                    'body'  => $rawBody,
+                ],
             ]);
         }
 
@@ -97,19 +110,27 @@ class WxWorkCallbackController
         $eventType  = $event['Event']      ?? '';
         $changeType = $event['ChangeType'] ?? '';
 
-        Log::info('[Callback] 收到事件', [
-            'event'       => $eventType,
-            'change_type' => $changeType,
+        LogService::info([
+            'tag'     => 'Callback',
+            'message' => '收到事件',
+            'data'    => [
+                'event'       => $eventType,
+                'change_type' => $changeType,
+            ],
         ]);
 
         // 新增企业客户事件
         if ($eventType === 'change_external_contact' && $changeType === 'add_external_contact') {
             $result = $this->autoGroup->handleNewCustomer($event);
-            Log::info('[Callback] 建群结果', $result);
+            LogService::info([
+                'tag'     => 'Callback',
+                'message' => '建群结果',
+                'data'    => $result,
+            ]);
             return;
         }
 
-        // 可在此扩展更多事件处理
+        // 可在此扩展更多事件处理【比如客户消息】
         // if ($eventType === 'change_external_contact' && $changeType === 'del_external_contact') { ... }
     }
 }

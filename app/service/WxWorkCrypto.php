@@ -3,6 +3,8 @@ declare(strict_types=1);
 
 namespace app\service;
 
+use app\service\LogService;
+
 /**
  * 企业微信消息加解密工具
  * 基于官方 PHP SDK 精简封装
@@ -36,7 +38,6 @@ class WxWorkCrypto
         string $postData
     ): array {
         // 1. 从 XML 取出加密消息
-        $xmlArr = [];
         libxml_use_internal_errors(true);
         $xml = simplexml_load_string($postData, 'SimpleXMLElement', LIBXML_NOCDATA);
         if ($xml === false) {
@@ -91,15 +92,19 @@ class WxWorkCrypto
         $computed = sha1($str);
 
         // 调试日志
-        \think\facade\Log::info('[Crypto] 签名验证调试', [
-            'token'     => $this->token,
-            'timestamp' => $timestamp,
-            'nonce'     => $nonce,
-            'encrypt'   => $encrypt,
-            'sorted'    => $arr,
-            'joined'    => $str,
-            'computed'  => $computed,
-            'received'  => $signature,
+        LogService::info([
+            'tag'     => 'Crypto',
+            'message' => '签名验证调试',
+            'data'    => [
+                'token'     => $this->token,
+                'timestamp' => $timestamp,
+                'nonce'     => $nonce,
+                'encrypt'   => $encrypt,
+                'sorted'    => $arr,
+                'joined'    => $str,
+                'computed'  => $computed,
+                'received'  => $signature,
+            ],
         ]);
 
         if (!hash_equals($computed, $signature)) {

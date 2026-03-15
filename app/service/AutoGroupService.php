@@ -3,8 +3,8 @@ declare(strict_types=1);
 
 namespace app\service;
 
+use app\service\LogService;
 use think\facade\Db;
-use think\facade\Log;
 
 /**
  * 新客户自动建群业务逻辑
@@ -40,13 +40,21 @@ class AutoGroupService
         $externalUserId = $event['ExternalUserID'] ?? '';
 
         if (empty($staffUserId) || empty($externalUserId)) {
-            Log::warning('[AutoGroup] 事件缺少必要字段', $event);
+            LogService::warning([
+                'tag'     => 'AutoGroup',
+                'message' => '事件缺少必要字段',
+                'data'    => $event,
+            ]);
             return ['success' => false, 'msg' => '事件字段不完整'];
         }
 
-        Log::info('[AutoGroup] 收到新客户事件', [
-            'staff'    => $staffUserId,
-            'customer' => $externalUserId,
+        LogService::info([
+            'tag'     => 'AutoGroup',
+            'message' => '收到新客户事件',
+            'data'    => [
+                'staff'    => $staffUserId,
+                'customer' => $externalUserId,
+            ],
         ]);
 
         // 1. 获取客户详情（昵称等）
@@ -79,10 +87,14 @@ class AutoGroupService
                 $this->wxWork->sendGroupMessage($chatId, $welcomeMsg);
             }
 
-            Log::info('[AutoGroup] 建群完成', [
-                'chatid'   => $chatId,
-                'name'     => $groupName,
-                'customer' => $externalUserId,
+            LogService::info([
+                'tag'     => 'AutoGroup',
+                'message' => '建群完成',
+                'data'    => [
+                    'chatid'   => $chatId,
+                    'name'     => $groupName,
+                    'customer' => $externalUserId,
+                ],
             ]);
 
             // 6. 记录日志到数据库
@@ -103,9 +115,14 @@ class AutoGroupService
                 'members'   => $members,
             ];
         } catch (\Throwable $e) {
-            Log::error('[AutoGroup] 建群失败: ' . $e->getMessage(), [
-                'customer' => $externalUserId,
-                'staff'    => $staffUserId,
+            LogService::error([
+                'tag'     => 'AutoGroup',
+                'message' => '建群失败',
+                'data'    => [
+                    'error'    => $e->getMessage(),
+                    'customer' => $externalUserId,
+                    'staff'    => $staffUserId,
+                ],
             ]);
 
             $this->saveLog([
@@ -130,7 +147,11 @@ class AutoGroupService
         try {
             Db::table('group_chat_log')->insert($data);
         } catch (\Throwable $e) {
-            Log::warning('[AutoGroup] 日志写入失败: ' . $e->getMessage());
+            LogService::warning([
+                'tag'     => 'AutoGroup',
+                'message' => '日志写入失败',
+                'data'    => ['error' => $e->getMessage()],
+            ]);
         }
     }
 
@@ -143,9 +164,13 @@ class AutoGroupService
             $contact = $this->wxWork->getExternalContact($externalUserId);
             return $contact['name'] ?? '新客户';
         } catch (\Throwable $e) {
-            Log::warning('[AutoGroup] 获取客户名称失败，使用默认值', [
-                'external_userid' => $externalUserId,
-                'error'           => $e->getMessage(),
+            LogService::warning([
+                'tag'     => 'AutoGroup',
+                'message' => '获取客户名称失败，使用默认值',
+                'data'    => [
+                    'external_userid' => $externalUserId,
+                    'error'           => $e->getMessage(),
+                ],
             ]);
             return '新客户';
         }

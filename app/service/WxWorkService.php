@@ -3,9 +3,9 @@ declare(strict_types=1);
 
 namespace app\service;
 
+use app\service\LogService;
 use GuzzleHttp\Client;
 use think\facade\Cache;
-use think\facade\Log;
 
 /**
  * 企业微信核心服务
@@ -53,7 +53,11 @@ class WxWorkService
         ]);
 
         if ($res['errcode'] !== 0) {
-            Log::error('[WxWork] 获取 access_token 失败', $res);
+            LogService::error([
+                'tag'     => 'WxWork',
+                'message' => '获取 access_token 失败',
+                'data'    => $res,
+            ]);
             throw new \RuntimeException('获取 access_token 失败: ' . $res['errmsg']);
         }
 
@@ -98,11 +102,19 @@ class WxWorkService
         $res = $this->post('appchat/create?access_token=' . $token, $body);
 
         if ($res['errcode'] !== 0) {
-            Log::error('[WxWork] 创建群聊失败', $res);
+            LogService::error([
+                'tag'     => 'WxWork',
+                'message' => '创建群聊失败',
+                'data'    => $res,
+            ]);
             throw new \RuntimeException('创建群聊失败: ' . $res['errmsg'] . ' (code=' . $res['errcode'] . ')');
         }
 
-        Log::info('[WxWork] 群聊创建成功', ['chatid' => $res['chat_id']]);
+        LogService::info([
+            'tag'     => 'WxWork',
+            'message' => '群聊创建成功',
+            'data'    => ['chatid' => $res['chat_id']],
+        ]);
 
         return ['chatid' => $res['chat_id']];
     }
@@ -124,7 +136,11 @@ class WxWorkService
         $res = $this->post('appchat/send?access_token=' . $token, $body);
 
         if ($res['errcode'] !== 0) {
-            Log::error('[WxWork] 群聊消息发送失败', $res);
+            LogService::error([
+                'tag'     => 'WxWork',
+                'message' => '群聊消息发送失败',
+                'data'    => $res,
+            ]);
             return false;
         }
 
@@ -148,7 +164,11 @@ class WxWorkService
         ]);
 
         if ($res['errcode'] !== 0) {
-            Log::error('[WxWork] 获取客户详情失败', $res);
+            LogService::error([
+                'tag'     => 'WxWork',
+                'message' => '获取客户详情失败',
+                'data'    => $res,
+            ]);
             throw new \RuntimeException('获取客户详情失败: ' . $res['errmsg']);
         }
 
