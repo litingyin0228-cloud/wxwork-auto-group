@@ -42,10 +42,19 @@ class WxWorkCallbackController
     public function verify(Request $request): Response
     {
         try {
-            $echoStr  = $request->get('echostr', '');
-            $msgSig   = $request->get('msg_signature', '');
+            // 兼容两种参数名：msg_signature 或 signature
+            $msgSig   = $request->get('msg_signature', $request->get('signature', ''));
             $ts       = $request->get('timestamp', '');
             $nonce    = $request->get('nonce', '');
+            $echoStr  = $request->get('echostr', '');
+
+            Log::info('[Callback] URL 验证参数', [
+                'msg_signature' => $msgSig,
+                'timestamp'     => $ts,
+                'nonce'         => $nonce,
+                'echostr'       => $echoStr,
+                'all_params'    => $request->get(),
+            ]);
 
             $plainText = $this->crypto->verifyUrl($msgSig, $ts, $nonce, $echoStr);
 

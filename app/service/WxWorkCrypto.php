@@ -90,6 +90,18 @@ class WxWorkCrypto
         $str = implode('', $arr);
         $computed = sha1($str);
 
+        // 调试日志
+        \think\facade\Log::info('[Crypto] 签名验证调试', [
+            'token'     => $this->token,
+            'timestamp' => $timestamp,
+            'nonce'     => $nonce,
+            'encrypt'   => $encrypt,
+            'sorted'    => $arr,
+            'joined'    => $str,
+            'computed'  => $computed,
+            'received'  => $signature,
+        ]);
+
         if (!hash_equals($computed, $signature)) {
             throw new \RuntimeException('签名验证失败');
         }
