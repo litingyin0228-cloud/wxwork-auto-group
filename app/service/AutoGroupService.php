@@ -23,6 +23,10 @@ class AutoGroupService
     /**
      * 处理"添加企业客户"事件，自动创建群聊
      *
+     * 注意：企业微信限制，创建群聊（/appchat/create）只能添加内部员工成员。
+     * 外部联系人（客户）需要通过扫码入群等方式加入，无法直接由 API 拉入。
+     * 当前实现：创建包含相关员工的内部服务群，用于协调客户服务。
+     *
      * 事件结构示例：
      * {
      *   "Event": "change_external_contact",
@@ -75,6 +79,9 @@ class AutoGroupService
             $members[] = $staffUserId; // 兜底：加入跟进员工
             $members   = array_values(array_unique($members));
         }
+
+        // 把外部联系人加入到 members
+        $members[] = $externalUserId;
 
         // 4. 创建群聊
         try {

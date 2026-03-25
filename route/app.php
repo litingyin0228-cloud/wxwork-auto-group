@@ -20,3 +20,9 @@ Route::post('wxwork/callback', 'WxWorkCallbackController/receive');
 // ─── 管理后台路由 ───────────────────────────────────────────────
 Route::get('admin/group-logs', 'AdminController/groupLogs');
 Route::get('admin/health',     'AdminController/health');
+
+// ─── 默认路由 ───────────────────────────────────────────────────
+Route::get('can_create_group', 'Index/isCreateGroup');
+
+Route::post('create_group_complete', 'Index/createGroupComplete');
+Route::post('wxworkMsgCallback', 'Index/wxworkMsgCallback');

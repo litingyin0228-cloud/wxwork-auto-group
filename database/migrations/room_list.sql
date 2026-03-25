@@ -1,0 +1,21 @@
+CREATE TABLE `room_list` (
+  `id` int(11) NOT NULL AUTO_INCREMENT COMMENT '自增主键ID',
+  `room_id` varchar(50) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '群ID',
+  `owner_vid` varchar(50) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '群主VID',
+  `createts` int(11) NOT NULL COMMENT '创建时间戳',
+  `updatets` int(11) NOT NULL COMMENT '更新时间戳',
+  `member_count` int(11) NOT NULL DEFAULT '0' COMMENT '群成员数量',
+  `flag` int(11) NOT NULL DEFAULT '0' COMMENT '标志位',
+  `roomname` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '群名称',
+  `roomurl` varchar(500) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '群头像URL',
+  `infoticket` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '信息票据',
+  `shift_time` int(11) NOT NULL DEFAULT '0' COMMENT '移交时间',
+  `old_owner_vid` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT '0' COMMENT '原群主VID',
+  `create_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `update_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_room_id` (`room_id`),
+  KEY `idx_owner_vid` (`owner_vid`),
+  KEY `idx_create_at` (`create_at`),
+  KEY `idx_update_at` (`update_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='我的群列表';

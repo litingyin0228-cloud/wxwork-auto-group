@@ -5,6 +5,7 @@ namespace app;
 
 use think\App;
 use think\exception\ValidateException;
+use think\response\Json;
 use think\Validate;
 
 /**
@@ -91,4 +92,21 @@ abstract class BaseController
         return $v->failException(true)->check($data);
     }
 
+    public function success($data = [], string $message = 'success'): Json
+    {
+        return json([
+            'code' => 0,
+            'data' => $data,
+            'message' => $message,
+        ]);
+    }
+
+    public function error(string $message = 'error', int $code = 1, $data = []): Json
+    {
+        return json([
+            'code' => $code,
+            'data' => $data,
+            'message' => $message,
+        ]);
+    }
 }

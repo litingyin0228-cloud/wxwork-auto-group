@@ -94,13 +94,22 @@ class WxWorkService
             'owner'     => $owner,
             'userlist'  => array_values(array_unique($userList)),
         ];
+        LogService::info([
+            'tag'     => 'WxWork',
+            'message' => '创建群聊参数',
+            'data'    => $body,
+        ]);
 
         if ($chatId !== '') {
             $body['chatid'] = $chatId;
         }
 
         $res = $this->post('appchat/create?access_token=' . $token, $body);
-
+        LogService::info([
+            'tag'     => 'WxWork',
+            'message' => '创建群聊请求',
+            'data'    => $res,
+        ]);
         if ($res['errcode'] !== 0) {
             LogService::error([
                 'tag'     => 'WxWork',
@@ -113,10 +122,10 @@ class WxWorkService
         LogService::info([
             'tag'     => 'WxWork',
             'message' => '群聊创建成功',
-            'data'    => ['chatid' => $res['chat_id']],
+            'data'    => ['chatid' => $res['chatid']],
         ]);
 
-        return ['chatid' => $res['chat_id']];
+        return ['chatid' => $res['chatid']];
     }
 
     /**

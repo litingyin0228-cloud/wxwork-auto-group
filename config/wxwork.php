@@ -25,10 +25,10 @@ return [
         'name_tpl'   => '{name}的专属服务群',
 
         // 群主（企业成员 userid，由该成员作为群主）
-        'owner'      => env('WXWORK.WXWORK_GROUP_OWNER', 'XiaoKe'),
+        'owner'      => env('WXWORK.WXWORK_GROUP_OWNER', 'LiTingYin'),
 
         // 默认陪同成员列表（userid 数组），群主会自动加入，无需重复填写
-        'members'    => ["LiTingYin"],
+        'members'    => ["XiaoKe"],
 
         // 欢迎语（创建群后由群主发送，留空则不发送）
         'welcome_msg' => '您好！欢迎加入专属服务群，有任何问题请随时告知，我们会尽快为您解答 😊',
