@@ -287,10 +287,10 @@ class JuhebotService
      * @param int $limit 每页数量（可选，默认10）
      * @return array
      */
-    public function syncApplyContact(string $guid, string $seq = '', int $limit = 10): array
+    public function syncApplyContact( string $seq = '', int $limit = 10): array
     {
         $data = [
-            'guid' => $guid,
+            'guid' => $this->guid,
         ];
 
         if (!empty($seq)) {
@@ -302,8 +302,8 @@ class JuhebotService
         }
 
         $res = $this->post('/contact/sync_apply_contact', $data);
-
-        if ($res['code'] !== 0) {
+        
+        if ($res['error_code'] !== 0) {
             LogService::error([
                 'tag'     => 'Juhebot',
                 'message' => '同步申请好友列表失败',
@@ -339,7 +339,7 @@ class JuhebotService
 
         $res = $this->post('/contact/agree_contact', $data);
 
-        if ($res['code'] !== 0) {
+        if ($res['error_code'] !== 0) {
             LogService::error([
                 'tag'     => 'Juhebot',
                 'message' => '同意联系人申请失败',
@@ -442,7 +442,7 @@ class JuhebotService
 
         $res = $this->post('/room/create_outer_room', $data);
 
-        if ($res['code'] !== 0) {
+        if ($res['error_code'] !== 0) {
             LogService::error([
                 'tag'     => 'Juhebot',
                 'message' => '创建外部群失败',
@@ -477,7 +477,7 @@ class JuhebotService
 
         $res = $this->post('/msg/send_text', $data);
 
-        if ($res['code'] !== 0) {
+        if ($res['error_code'] !== 0) {
             LogService::error([
                 'tag'     => 'Juhebot',
                 'message' => '发送文本消息失败',
@@ -489,6 +489,41 @@ class JuhebotService
         LogService::info([
             'tag'     => 'Juhebot',
             'message' => '文本消息发送成功',
+            'data'    => $res,
+        ]);
+
+        return $res;
+    }
+
+    /**
+     * 修改群名称
+     *
+     * @param string $roomId 群ID
+     * @param string $roomName 新群名称
+     * @return array
+     */
+    public function modifyRoomName(string $roomId = '', string $roomName = ''): array
+    {
+        $data = [
+            'guid'      => $this->guid,
+            'room_id'   => $roomId,
+            'room_name' => $roomName,
+        ];
+
+        $res = $this->post('/room/modify_room_name', $data);
+
+        if ($res['error_code'] !== 0) {
+            LogService::error([
+                'tag'     => 'Juhebot',
+                'message' => '修改群名称失败',
+                'data'    => $res,
+            ]);
+            throw new \RuntimeException('修改群名称失败: ' . $res['message']);
+        }
+
+        LogService::info([
+            'tag'     => 'Juhebot',
+            'message' => '群名称修改成功',
             'data'    => $res,
         ]);
 

@@ -12,12 +12,28 @@ use app\model\JuhebotMessageCallback;
 use app\model\ApplyContactList;
 use app\service\JuhebotService;
 use app\service\LogService;
+use think\facade\Cache;
 
 /**
  * 处理 Juhebot 消息回调的命令
  */
 class ProcessMessage extends Command
 {
+    private static ?JuhebotService $juhebotService = null;
+
+    /**
+     * 获取 JuhebotService 单例
+     *
+     * @return JuhebotService
+     */
+    private function getJuhebot(): JuhebotService
+    {
+        if (self::$juhebotService === null) {
+            self::$juhebotService = new JuhebotService();
+        }
+        return self::$juhebotService;
+    }
+
     protected function configure()
     {
         $this->setName('process:message')
@@ -143,6 +159,7 @@ class ProcessMessage extends Command
         $output->writeln('');
     }
 
+    
     /**
      * 处理好友申请
      *
@@ -158,6 +175,7 @@ class ProcessMessage extends Command
         }
 
         $output->writeln('<info>正在处理好友申请...</info>');
+        $guid = env("JUHEBOT.GUID");
 
         $applies = ApplyContactList::getPendingList($guid, $limit);
 
@@ -173,12 +191,22 @@ class ProcessMessage extends Command
 
         foreach ($applies as $apply) {
             try {
-                $this->handleApplyContact($apply);
+                $result = $this->handleApplyContact($apply);
                 ApplyContactList::markAsProcessed($apply['id'], ApplyContactList::STATUS_AGREED);
                 $successCount++;
 
+                // 加入群聊
+                // 2、创建外部群 -- 1688853366477816 企业的客服人员
+                if ($apply['in_room'] == 0) {
+                    $roomResult = $this->getJuhebot()->createOuterRoom([$apply['user_id'],"1688853366477816"]);
+                    // 3、发送欢迎语
+                    $room_id = $roomResult['data']['roomid'];// 得到房间号
+                    $this->getJuhebot()->sendText("R:".$room_id, $apply['name'] . ' 欢迎加入群聊，我们将为您提供专业的一对一服务。');
+                    sleep(rand(1,5));
+                    // 4、重命名群聊
+                    $this->getJuhebot()->modifyRoomName($room_id, "新客户【{$apply['name']}】VIP专属服务群");
+                }            
                 $output->writeln('<info>✓ 申请 ID: ' . $apply['id'] . ' 处理成功</info>');
-
             } catch (\Throwable $e) {
                 $failCount++;
 
@@ -190,7 +218,6 @@ class ProcessMessage extends Command
                         'error'    => $e->getMessage(),
                     ],
                 ]);
-
                 $output->writeln('<error>✗ 申请 ID: ' . $apply['id'] . ' 处理失败: ' . $e->getMessage() . '</error>');
             }
         }
@@ -260,8 +287,9 @@ class ProcessMessage extends Command
 
         
 
+
         // 1、同意好友请求
-        $juhebot = new JuhebotService();
+        $juhebot = $this->getJuhebot();
         $result = $juhebot->agreeContact($message['sender']);
 
         // 2、创建外部群 -- 1688853366477816 企业的客服人员
@@ -297,9 +325,7 @@ class ProcessMessage extends Command
 
         // TODO: 实现好友申请处理逻辑
         // 例如：自动同意、通知管理员等
-
-        // 示例：自动同意好友申请
-        // $juhebot = new JuhebotService();
-        // $juhebot->agreeContact($apply['guid'], $sender, '');
+        $this->getJuhebot()->agreeContact($apply['user_id']);
+        return true;
     }
 }

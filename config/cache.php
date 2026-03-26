@@ -25,5 +25,15 @@ return [
             'serialize'  => [],
         ],
         // 更多的缓存连接
+        'redis' => [
+            'type'       => 'Redis',
+            'host'       => env('redis.host', '127.0.0.1'),
+            'port'       => env('redis.port', 6379),
+            'password'   => env('redis.password', ''),
+            'db'         => env('redis.db', 5),
+            'prefix'     => env('redis.prefix', ''),
+            'expire'     => env('redis.expire', 0),
+            'serialize'  => ['serialize', 'unserialize'],
+        ],
     ],
 ];

@@ -3,7 +3,9 @@ declare(strict_types=1);
 
 namespace app\service;
 
+use app\model\ApplyContactList;
 use app\service\LogService;
+use think\facade\Cache;
 use think\facade\Db;
 
 /**
@@ -13,12 +15,69 @@ class AutoGroupService
 {
     private WxWorkService $wxWork;
     private array $config;
+    private static ?JuhebotService $juhebotService = null;
 
     public function __construct(WxWorkService $wxWork)
     {
         $this->wxWork = $wxWork;
         $this->config = config('wxwork.auto_group') ?? [];
     }
+
+    /**
+     * 获取 JuhebotService 单例
+     *
+     * @return JuhebotService
+     */
+    private function getJuhebot(): JuhebotService
+    {
+        if (self::$juhebotService === null) {
+            self::$juhebotService = new JuhebotService();
+        }
+        return self::$juhebotService;
+    }
+
+    /**
+     * 同步联系人
+     */
+    protected function syncApplyContact()
+    {
+        $seq = Cache::get('last_apply_seq');
+        // 同步好友申请
+        $contactList = $this->getJuhebot()->syncApplyContact($seq);
+        
+        LogService::info([
+            'tag'     => 'AutoGroup',
+            'message' => '自动同步好友申请',
+            'data'    => $contactList,
+        ]);
+        if (empty($contactList['data']['contact_list'])) {
+            return;
+        }
+        $insertCount = 0;
+        
+        Cache::set('last_apply_seq', $contactList['data']['last_seq']); // 缓存SEQ
+        foreach ($contactList['data']['contact_list'] as $contact) {
+            if (ApplyContactList::where("user_id",$contact['user_id'])->count() > 0) {
+                continue;
+            }
+            // 处理每个联系人
+            $insertData = $contact;
+            $insertData['extend_info_desc'] = $contact['extend_info']['desc'];
+            $insertData['extend_info_remark'] = $contact['extend_info']['desc'];
+            $insertData['extend_info_company_remark'] = $contact['extend_info']['desc'];
+            $insertData['extend_info_remark_time'] = $contact['extend_info']['desc'];
+            $insertData['extend_info_remark_url'] = $contact['extend_info']['desc'];
+            ApplyContactList::create($contact);
+            $insertCount++;
+        }
+        return $insertCount;
+    }
+
+    // // 处理新客户事件- 同步好友申请
+    // public function handleNewCustomerV2()
+    // {
+       
+    // }
 
     /**
      * 处理"添加企业客户"事件，自动创建群聊
@@ -60,6 +119,9 @@ class AutoGroupService
                 'customer' => $externalUserId,
             ],
         ]);
+
+        // 1、同步信息
+        // $this->syncApplyContact();
 
         // 1. 获取客户详情（昵称等）
         $customerName = $this->resolveCustomerName($externalUserId);

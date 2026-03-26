@@ -178,9 +178,8 @@ class ApplyContactList extends Model
      */
     public static function getPendingList(string $guid, int $limit = 20): array
     {
-        return self::where('guid', $guid)
-            ->where('status', self::STATUS_PENDING)
-            ->order('send_time', 'desc')
+        return self::where('status', self::STATUS_PENDING)
+            ->order('create_at', 'desc')
             ->limit($limit)
             ->select()
             ->toArray();
@@ -197,7 +196,7 @@ class ApplyContactList extends Model
     {
         return self::where('id', $id)->update([
             'status'     => $status,
-            'updated_at' => date('Y-m-d H:i:s'),
+            'update_at' => date('Y-m-d H:i:s'),
         ]) > 0;
     }
 

@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace app\controller;
 
 use app\service\AutoGroupService;
+use app\service\JuhebotService;
 use app\service\LogService;
 use app\service\WxWorkCrypto;
 use app\service\WxWorkService;
@@ -21,7 +22,7 @@ class WxWorkCallbackController
 {
     private WxWorkCrypto     $crypto;
     private AutoGroupService $autoGroup;
-
+    
     public function __construct()
     {
         $cfg = config('wxwork');
@@ -35,6 +36,8 @@ class WxWorkCallbackController
         $wxWorkService   = new WxWorkService();
         $this->autoGroup = new AutoGroupService($wxWorkService);
     }
+
+    
 
     /**
      * URL 接入验证（GET 请求）
@@ -121,10 +124,12 @@ class WxWorkCallbackController
 
         // 新增企业客户事件
         if ($eventType === 'change_external_contact' && $changeType === 'add_external_contact') {
+            // 处理新客户事件
             $result = $this->autoGroup->handleNewCustomer($event);
+            // $result = $this->autoGroup->handleNewCustomer($event);
             LogService::info([
                 'tag'     => 'Callback',
-                'message' => '建群结果',
+                'message' => '申请列表同步结果',
                 'data'    => $result,
             ]);
             return;
