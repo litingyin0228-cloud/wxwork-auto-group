@@ -18,8 +18,8 @@ class AdminController
         $limit = 20;
 
         try {
-            $total = Db::table('group_chat_log')->count();
-            $list  = Db::table('group_chat_log')
+            $total = Db::table('wxwork_group_chat_log')->count();
+            $list  = Db::table('wxwork_group_chat_log')
                 ->order('id', 'desc')
                 ->page($page, $limit)
                 ->select()

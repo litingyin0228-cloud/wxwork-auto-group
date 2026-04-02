@@ -173,10 +173,10 @@ class ApplyContactList extends Model
      * 获取待处理的申请列表
      *
      * @param string $guid
-     * @param int $limit
+     * @param $limit
      * @return array
      */
-    public static function getPendingList(string $guid, int $limit = 20): array
+    public static function getPendingList(int $limit = 20): array
     {
         return self::where('status', self::STATUS_PENDING)
             ->order('create_at', 'desc')
@@ -200,6 +200,20 @@ class ApplyContactList extends Model
         ]) > 0;
     }
 
+    /**
+     * 标记申请为已处理
+     *
+     * @param int $id
+     * @param int $status
+     * @return bool
+     */
+    public static function markAsInRoom(int $id, int $status): bool
+    {
+        return self::where('id', $id)->update([
+            'in_room'     => $status,
+            'update_at' => date('Y-m-d H:i:s'),
+        ]) > 0;
+    }
     /**
      * 标记申请为已同意
      *

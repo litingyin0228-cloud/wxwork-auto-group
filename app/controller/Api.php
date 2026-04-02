@@ -3,80 +3,57 @@ namespace app\controller;
 
 use app\BaseController;
 use app\model\ApplyContactList;
+use app\model\GroupChatLog;
 use app\service\JuhebotService;
 use app\service\LogService;
+use app\service\MessageCallbackService;
+use app\service\WxWorkService;
+use Fukuball\Jieba\Finalseg;
+use Fukuball\Jieba\Jieba;
 use think\App;
 use think\facade\Cache;
 use think\facade\Db;
+use think\facade\Event;
+use think\Request;
 
 class Api extends BaseController
 {
-    /**
-     * 聚合聊天服务
-     */
+    public function testJuheApi(Request $request){
+        // $this->getJuhebot()->sendWeApp("R:10893760625613145", ,"一键零申报","","欢迎使用一键零申报","/pages/index/index","https://shenbao.guiyangyuanqu.cn/uploads/images/logo.jpg",0,"");
+        // $content = $request->get('content');
+        // ini_set('memory_limit', '1024M');
+        // Jieba::init();
+        // Finalseg::init();
+        // $res = Jieba::cut($content);
 
-    private static ?JuhebotService $juhebotService = null;
-    /**
-     * 获取 JuhebotService 单例
-     *
-     * @return JuhebotService
-     */
-    private function getJuhebot(): JuhebotService
-    {
-        if (self::$juhebotService === null) {
-            self::$juhebotService = new JuhebotService();
-        }
-        return self::$juhebotService;
-    }
+        $service = new WxWorkService();
+        $res = $service->addContactWay("");
+        return $this->success(["res"=>$res],'添加联系人方式成功');
 
-    /**
-     * 日志服务
-     */
-    private LogService $logService;
+        // $seq = Cache::set("last_contact_seq", "17999357");
 
-    public function __construct(App $app)
-    {
-        $this->logService = new LogService();
-        parent::__construct($app);
-    }
+        $orgName = Db::table("tax_org")->where("tax_id", 171)->value("name");
+        // dd($orgName);
 
-    public function testJuheApi(){
+        // $applies = ApplyContactList::getPendingList(10);
+
+        return $this->success(["res"=>$orgName],'处理好友申请成功');
+        // Event::trigger('RoomCreated', [
+        //     'guid'        => "0e950e07-0b01-3019-8269-31cee91ee6bf",
+        //     'notify_type' => 2131,
+        //     'data'        => [],
+        // ]);
+        // return $this->success(["seq"=>Cache::get("last_contact_seq")],'获取申请联系人序号成功');
+        // $service = new MessageCallbackService();
+        // $res = $service->processApplyContacts(env('JUHEBOT.GUID', ''), 10);
+        // return $this->success(["res"=>$res],'处理好友申请成功');
+
+        // echo GroupChatLog::where("customer_name", "干干")->where("mobile", "!=", "")->limit(1)->value("mobile");
+
+        // echo Db::table("tax_members")->where("phone", "13765089454")->value("org_id");
         
-        $res = $this->syncApplyContact();
-        return $this->success(["insertCount"=>$res],'同步申请人列表成功');
-    }
-
-    protected function syncApplyContact()
-    {
-        $seq = Cache::get('last_apply_seq');
-        // 同步好友申请
-        $contactList = $this->getJuhebot()->syncApplyContact($seq);
-        
-        LogService::info([
-            'tag'     => 'AutoGroup',
-            'message' => '同步好友申请',
-            'data'    => $contactList,
-        ]);
-        if (empty($contactList['data']['contact_list'])) {
-            return;
-        }
-        $insertCount = 0;
-        
-        Cache::set('last_apply_seq', $contactList['data']['last_seq']); // 缓存SEQ
-        foreach ($contactList['data']['contact_list'] as $contact) {
-            if (ApplyContactList::where("user_id",$contact['user_id'])->count() > 0) {
-                continue;
-            }
-            // 处理每个联系人
-            $insertData = $contact;
-            $insertData['extend_info_desc'] = $contact['extend_info']['desc'];
-            $insertData['extend_info_remark'] = $contact['extend_info']['desc'];
-            $insertData['extend_info_company_remark'] = $contact['extend_info']['desc'];
-            $insertData['extend_info_remark_time'] = $contact['extend_info']['desc'];
-            $insertData['extend_info_remark_url'] = $contact['extend_info']['desc'];
-            ApplyContactList::create($contact);
-            $insertCount++;
-        }
-        return $insertCount;
+        // return $this->success(["content"=>$content, "list"=>$res],'分词成功');
+        // $res = $this->syncApplyContact();
+        // return $this->success(["insertCount"=>$res],'同步申请人列表成功');
     }
 }

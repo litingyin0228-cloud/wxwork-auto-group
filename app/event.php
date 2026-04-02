@@ -10,6 +10,7 @@ return [
         'HttpEnd'  => [],
         'LogLevel' => [],
         'LogWrite' => [],
+        'RoomCreated' => [\app\listener\RoomCreated::class],
     ],
 
     'subscribe' => [

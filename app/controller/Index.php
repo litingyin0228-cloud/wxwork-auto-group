@@ -2,8 +2,14 @@
 namespace app\controller;
 
 use app\BaseController;
+use app\model\ApplyContactList;
+use app\model\ContactRoom;
+use app\service\JuhebotService;
 use app\service\LogService;
+use app\service\WxWorkService;
 use think\facade\Db;
+use think\facade\Event;
+use think\Request;
 
 class Index extends BaseController
 {
@@ -19,67 +25,16 @@ class Index extends BaseController
 
     public function isCreateGroup()
     {
-        $total = Db::table('group_chat_log')->where("is_process","=", 0)->field(["id", "external_userid","staff_userid","customer_name"])->find();
+        $total = Db::table('wxwork_group_chat_log')->where("is_process","=", 0)->field(["id", "external_userid","staff_userid","customer_name"])->find();
         return json([
             'code' => 0,
-            'msg' => 'ok',
+            'msg' => 'ok',  
             'data' => $total,
         ]);
     }
 
     /**
-     * {
-        "guid": "xxx",
-        "notify_type": 11010,
-        "data": {
-            "seq": "7272646",
-            "id": "1067188",
-            "appinfo": "CAUQu+WWsAYYzKLu+vKDwOAXIMzQh6QF",
-            "sender": "16888",
-            "receiver": "788",
-            "roomid": "0",
-            "sendtime": 1711649467,
-            "sender_name": "小助手",
-            "content_type": 2,
-            "referid": "0",
-            "flag": 16777216,
-            "content": "hello world",
-            "at_list": [],
-            "quote_content": "",
-            "quote_appinfo": "",
-            "send_flag": 1,
-            "msg_type": 2
-        }
-    }
-     */
-
-    /**
-     * 处理 Juhebot 消息回调
-     *
-     * 请求参数：
-     * {
-     *   "guid": "xxx",
-     *   "notify_type": 11010,
-     *   "data": {
-     *     "seq": "7272646",
-     *     "id": "1067188",
-     *     "appinfo": "CAUQu+WWsAYYzKLu+vKDwOAXIMzQh6QF",
-     *     "sender": "16888",
-     *     "receiver": "788",
-     *     "roomid": "0",
-     *     "sendtime": 1711649467,
-     *     "sender_name": "小助手",
-     *     "content_type": 2,
-     *     "referid": "0",
-     *     "flag": 16777216,
-     *     "content": "hello world",
-     *     "at_list": [],
-     *     "quote_content": "",
-     *     "quote_appinfo": "",
-     *     "send_flag": 1,
-     *     "msg_type": 2
-     *   }
-     * }
+     * 微信工作台消息回调
      */
     public function wxworkMsgCallback()
     {
@@ -108,7 +63,15 @@ class Index extends BaseController
             $notifyType = $params['notify_type'] ?? 0;
             $data = $params['data'] ?? [];
 
-            if (empty($guid) || empty($data)) {
+            // notify_type = 2132 建群回调
+            // 触发建群回调事件
+            Event::trigger('RoomCreated', [
+                'guid'        => $guid,
+                'notify_type' => $notifyType,
+                'data'        => $data,
+            ]);
+            
+            if (empty($guid)) {
                 LogService::error([
                     'tag'     => 'JuhebotCallback',
                     'message' => '缺少必要参数',
@@ -140,7 +103,7 @@ class Index extends BaseController
             $msgType = $data['msg_type'] ?? 0;
 
             // 保存消息到数据库
-            $result = Db::table('juhebot_message_callback')->insert([
+            $result = Db::table('wxwork_juhebot_message_callback')->insert([
                 'guid'          => $guid,
                 'notify_type'   => $notifyType,
                 'seq'           => $seq,
@@ -175,10 +138,7 @@ class Index extends BaseController
                         'sender'     => $sender,
                         'content'    => $content,
                     ],
-                ]);
-
-                // TODO: 根据业务需求处理消息
-                // 例如：自动回复、转发消息等
+                ]);                
 
                 return json([
                     'code'    => 0,
@@ -209,6 +169,56 @@ class Index extends BaseController
                 'code'    => 500,
                 'message' => '服务器内部错误',
             ]);
+        }
+    }
+
+    /**
+     * 获取动态二维码
+     */
+    public function getAddContactWayErCode(Request $request)
+    {
+        $qr_code = "https://wework.qpic.cn/wwpic3az/355116_4Zr9L0xNQi-ZfeV_1775115274/0"; // 默认二维码，没携带State参数
+        try {
+            $mobile = $request->param('mobile');
+            if(empty($mobile)){
+                return $this->error('手机号不能为空');
+            }
+            if(strlen($mobile) != 11){
+                return $this->error('手机号格式不正确');
+            }
+            if(!preg_match('/^1[3-9]\d{9}$/', $mobile)){
+                return $this->error('手机号格式不正确');
+            }
+            // 通过手机号码去
+            $user_id = ApplyContactList::where("mobile", $mobile)->value("user_id");
+            if(empty($user_id)){
+                $service = new WxWorkService();
+                $res = $service->addContactWay($mobile);
+                return $this->success($res,'动态二维码获取成功');
+            }
+            $roomId = ContactRoom::where("user_id", $user_id)->value("room_id");
+            if(empty($roomId)){
+                $service = new WxWorkService();
+                $res = $service->addContactWay($mobile);
+                return $this->success($res,'动态二维码获取成功');
+            }
+            // 获取群二维码
+            $service = new JuhebotService();
+            $res = $service->getRoomQRCode($roomId, $qr_code);
+            $result = $res['data'];
+            // aHR0cHM6Ly93ZXdvcmsucXBpYy5jbi93d3BpYzNhei8xOTQxNDdfZUJzTEN4R0tTSGFMMTU0XzE3NzQ5MTg3MzcvMA== php解码
+            // $result['qr_code'] = urldecode($result['image_url']);
+            return $this->success($result,'群二维码获取成功');
+        } catch (\Throwable $e) {
+            LogService::error([
+                'tag'     => 'getAddContactWayErCode',
+                'message' => '获取动态二维码异常',
+                'data'    => [
+                    'error'   => $e->getMessage(),
+                    'trace'   => $e->getTraceAsString(),
+                ],
+            ]);
+            return $this->error($e->getMessage() );
         }
     }
 }

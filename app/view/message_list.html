@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>消息列表 - 管理后台</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <style>
+        :root {
+            --primary: #4f46e5;
+            --primary-hover: #4338ca;
+            --bg-page: #f0f2f5;
+            --bg-card: #ffffff;
+            --text-main: #1f2937;
+            --text-muted: #6b7280;
+            --border: #e5e7eb;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: var(--bg-page);
+            color: var(--text-main);
+            min-height: 100vh;
+        }
+        .sidebar {
+            position: fixed;
+            left: 0; top: 0; bottom: 0;
+            width: 240px;
+            background: var(--primary);
+            color: #fff;
+            display: flex;
+            flex-direction: column;
+            z-index: 100;
+        }
+        .sidebar-brand {
+            padding: 24px 20px;
+            font-size: 18px;
+            font-weight: 700;
+            border-bottom: 1px solid rgba(255,255,255,0.15);
+            letter-spacing: 0.5px;
+        }
+        .sidebar-nav { flex: 1; padding: 12px 0; }
+        .sidebar-nav a {
+            display: flex; align-items: center;
+            padding: 12px 20px;
+            color: rgba(255,255,255,0.75);
+            text-decoration: none;
+            font-size: 14px;
+            transition: all 0.2s;
+            gap: 10px;
+        }
+        .sidebar-nav a i { font-size: 16px; width: 20px; text-align: center; }
+        .sidebar-nav a:hover, .sidebar-nav a.active {
+            background: rgba(255,255,255,0.12);
+            color: #fff;
+        }
+        .main-content { margin-left: 240px; min-height: 100vh; }
+        .topbar {
+            background: var(--bg-card);
+            border-bottom: 1px solid var(--border);
+            padding: 16px 28px;
+            display: flex; align-items: center; justify-content: space-between;
+        }
+        .topbar h1 { font-size: 20px; font-weight: 600; }
+        .page-body { padding: 28px; }
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+        }
+        .card-header {
+            background: none;
+            border-bottom: 1px solid var(--border);
+            padding: 16px 24px;
+            font-size: 15px;
+            font-weight: 600;
+            display: flex; align-items: center; justify-content: space-between;
+        }
+        .card-body { padding: 20px 24px; }
+        .filter-bar { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+        .filter-bar .form-control,
+        .filter-bar .form-select {
+            border-radius: 8px; font-size: 13px;
+            border-color: var(--border);
+            padding: 7px 12px;
+            height: auto;
+        }
+        .filter-bar .form-control:focus,
+        .filter-bar .form-select:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(79,70,229,0.1);
+        }
+        .btn { border-radius: 8px; font-size: 13px; padding: 7px 16px; }
+        .btn-primary { background: var(--primary); border-color: var(--primary); }
+        .btn-primary:hover { background: var(--primary-hover); border-color: var(--primary-hover); }
+        .btn-sm { padding: 4px 10px; font-size: 12px; }
+        .btn-success { background: #10b981; border-color: #10b981; }
+        .btn-success:hover { background: #059669; border-color: #059669; }
+        .btn-outline-secondary { border-color: var(--border); color: var(--text-muted); }
+        .btn-outline-secondary:hover { background: var(--bg-page); border-color: var(--border); color: var(--text-main); }
+        table { margin: 0; }
+        thead th {
+            font-size: 12px; font-weight: 600; color: var(--text-muted);
+            text-transform: uppercase; letter-spacing: 0.5px;
+            border-bottom: 2px solid var(--border);
+            padding: 12px 16px;
+            background: #fafafa;
+        }
+        tbody td {
+            font-size: 13px; vertical-align: middle;
+            padding: 14px 16px;
+            border-bottom: 1px solid var(--border);
+        }
+        tbody tr:last-child td { border-bottom: none; }
+        tbody tr:hover { background: #f9fafb; }
+        .msg-type-badge {
+            display: inline-flex; align-items: center; gap: 4px;
+            padding: 3px 10px; border-radius: 20px; font-size: 12px; font-weight: 500;
+            background: #e0e7ff; color: #3730a3;
+        }
+        .processed-badge {
+            display: inline-flex; align-items: center; gap: 4px;
+            padding: 3px 10px; border-radius: 20px; font-size: 12px; font-weight: 500;
+        }
+        .processed-yes { background: #d1fae5; color: #065f46; }
+        .processed-no { background: #fef3c7; color: #92400e; }
+        .content-preview {
+            max-width: 260px;
+            overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+            color: var(--text-muted);
+            cursor: pointer;
+        }
+        .content-preview:hover { color: var(--primary); }
+        .table-responsive { border-radius: 8px; overflow: hidden; }
+        .pagination-wrap { display: flex; justify-content: space-between; align-items: center; margin-top: 16px; }
+        .pagination-info { font-size: 13px; color: var(--text-muted); }
+        .pagination { margin: 0; gap: 4px; }
+        .pagination .page-link {
+            border-radius: 8px; font-size: 13px;
+            border-color: var(--border);
+            color: var(--text-main);
+            padding: 6px 12px;
+        }
+        .pagination .page-item.active .page-link {
+            background: var(--primary); border-color: var(--primary);
+        }
+        .pagination .page-link:hover { background: var(--bg-page); }
+        .table-checkbox { width: 18px; height: 18px; cursor: pointer; }
+        .modal-header { border-color: var(--border); }
+        .modal-footer { border-color: var(--border); }
+        .form-label { font-size: 13px; font-weight: 500; margin-bottom: 4px; }
+        .detail-row { display: flex; border-bottom: 1px solid var(--border); padding: 10px 0; }
+        .detail-row:last-child { border-bottom: none; }
+        .detail-label { width: 120px; flex-shrink: 0; font-weight: 500; color: var(--text-muted); font-size: 13px; }
+        .detail-value { flex: 1; font-size: 13px; word-break: break-all; }
+        .detail-value.pre { white-space: pre-wrap; font-family: monospace; }
+        .toast-container { position: fixed; top: 20px; right: 20px; z-index: 9999; }
+        .msg-type-icon { margin-right: 4px; }
+        @media (max-width: 768px) {
+            .sidebar { width: 200px; }
+            .main-content { margin-left: 200px; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="sidebar">
+    <div class="sidebar-brand">
+        <i class="bi bi-robot me-2"></i>企微自动群管理
+    </div>
+    <nav class="sidebar-nav">
+        <a href="/"><i class="bi bi-house"></i> 首页</a>
+        <a href="/admin/group-logs"><i class="bi bi-people"></i> 建群日志</a>
+        <a href="/contact/index"><i class="bi bi-person-lines-fill"></i> 联系人列表</a>
+        <a href="/message/index" class="active"><i class="bi bi-chat-left-text"></i> 消息列表</a>
+    </nav>
+</div>
+
+<div class="main-content">
+    <div class="topbar">
+        <h1><i class="bi bi-chat-left-text" style="color:var(--primary)"></i> 消息列表</h1>
+        <div>
+            <button class="btn btn-success btn-sm" onclick="batchMarkProcessed()">
+                <i class="bi bi-check-all"></i> 批量标记已处理
+            </button>
+        </div>
+    </div>
+
+    <div class="page-body">
+        <div class="card">
+            <div class="card-header">
+                <span><i class="bi bi-funnel"></i> 筛选条件</span>
+            </div>
+            <div class="card-body">
+                <div class="filter-bar">
+                    <input type="text" class="form-control" id="keyword" placeholder="搜索消息内容" style="width:180px" onkeydown="if(event.key==='Enter')loadList()">
+                    <input type="text" class="form-control" id="guid" placeholder="GUID" style="width:160px" onkeydown="if(event.key==='Enter')loadList()">
+                    <input type="text" class="form-control" id="roomId" placeholder="群ID" style="width:140px" onkeydown="if(event.key==='Enter')loadList()">
+                    <input type="text" class="form-control" id="sender" placeholder="发送者" style="width:140px" onkeydown="if(event.key==='Enter')loadList()">
+                    <select class="form-select" id="isProcessed" style="width:130px">
+                        <option value="">全部状态</option>
+                        <option value="0">未处理</option>
+                        <option value="1">已处理</option>
+                    </select>
+                    <select class="form-select" id="contentType" style="width:130px">
+                        <option value="">全部类型</option>
+                        <option value="0">文本消息</option>
+                        <option value="1">图片消息</option>
+                        <option value="3">语音消息</option>
+                        <option value="5">链接</option>
+                        <option value="6">小程序</option>
+                        <option value="7">文件</option>
+                        <option value="14">群@消息</option>
+                        <option value="43">视频</option>
+                        <option value="47">表情</option>
+                    </select>
+                    <button class="btn btn-primary" onclick="loadList()">
+                        <i class="bi bi-search"></i> 搜索
+                    </button>
+                    <button class="btn btn-outline-secondary" onclick="resetFilter()">
+                        <i class="bi bi-arrow-counterclockwise"></i> 重置
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="card mt-3">
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table mb-0">
+                        <thead>
+                            <tr>
+                                <th style="width:40px"><input type="checkbox" class="table-checkbox" id="checkAll" onchange="toggleCheckAll()"></th>
+                                <th>消息ID</th>
+                                <th>发送者</th>
+                                <th>接收者</th>
+                                <th>群ID</th>
+                                <th>消息类型</th>
+                                <th>处理状态</th>
+                                <th>消息内容</th>
+                                <th>发送时间</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tableBody">
+                            <tr><td colspan="10" class="text-center text-muted py-5">
+                                <i class="bi bi-hourglass-split fs-4 d-block mb-2"></i>加载中...
+                            </td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="pagination-wrap px-4 pb-3">
+                    <div class="pagination-info" id="paginationInfo">共 0 条</div>
+                    <div id="paginationBox"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="detailModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-info-circle"></i> 消息详情</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="detailContent">
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">关闭</button>
+                <button type="button" class="btn btn-success" id="modalMarkBtn" onclick="markFromModal()">标记已处理</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="toast-container" id="toastContainer"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+let currentPage = 1;
+let selectedIds = [];
+let modalCurrentId = null;
+let detailModal = null;
+
+document.addEventListener('DOMContentLoaded', () => {
+    detailModal = new bootstrap.Modal(document.getElementById('detailModal'));
+    loadList(1);
+});
+
+async function loadList(page = 1) {
+    currentPage = page;
+    const params = new URLSearchParams({
+        page,
+        limit: 20,
+        keyword: document.getElementById('keyword').value,
+        guid: document.getElementById('guid').value,
+        room_id: document.getElementById('roomId').value,
+        sender: document.getElementById('sender').value,
+        is_processed: document.getElementById('isProcessed').value,
+        content_type: document.getElementById('contentType').value,
+    });
+
+    const res = await fetch('/message/list?' + params);
+    const json = await res.json();
+    if (json.code !== 0) { showToast('加载失败: ' + json.msg, 'danger'); return; }
+
+    renderTable(json.data);
+    renderPagination(json.data.page, Math.ceil(json.data.total / json.data.limit), json.data.total);
+}
+
+const msgTypeIcons = {
+    0: 'bi-fonts', 1: 'bi-image', 3: 'bi-mic', 5: 'bi-link-45deg',
+    6: 'bi-grid-3x3-gap', 7: 'bi-file-earmark', 14: 'bi-at',
+    43: 'bi-film', 47: 'bi-emoji-smile',
+};
+
+function renderTable(data) {
+    const tbody = document.getElementById('tableBody');
+    if (!data.list || data.list.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="10" class="text-center text-muted py-5"><i class="bi bi-inbox fs-4 d-block mb-2"></i>暂无数据</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = data.list.map(item => {
+        const icon = msgTypeIcons[item.content_type] || 'bi-chat-left';
+        const processedClass = item.is_processed ? 'processed-yes' : 'processed-no';
+        const processedText = item.is_processed ? '已处理' : '未处理';
+        return `<tr data-id="${item.id}" class="${item.is_processed ? 'opacity-50' : ''}">
+            <td><input type="checkbox" class="table-checkbox row-check" value="${item.id}" ${selectedIds.includes(item.id) ? 'checked' : ''} onchange="updateSelected()"></td>
+            <td><code style="font-size:11px">${escapeHtml(item.msg_id || '-')}</code></td>
+            <td>
+                <div style="font-weight:500">${escapeHtml(item.sender_name || '-')}</div>
+                <div style="font-size:11px;color:var(--text-muted)">${escapeHtml(item.sender || '-')}</div>
+            </td>
+            <td><code style="font-size:11px">${escapeHtml(item.receiver || '-')}</code></td>
+            <td><code style="font-size:11px">${escapeHtml(item.room_id || '-')}</code></td>
+            <td><span class="msg-type-badge"><i class="bi ${icon} msg-type-icon"></i>${item.content_type_text}</span></td>
+            <td><span class="processed-badge ${processedClass}"><i class="bi ${item.is_processed ? 'bi-check-circle-fill' : 'bi-clock'}"></i>${processedText}</span></td>
+            <td><span class="content-preview" onclick="showDetail(${item.id})" title="${escapeHtml(item.content || '')}">${escapeHtml(item.content || '-')}</span></td>
+            <td style="font-size:12px">${item.send_time_text || '-'}</td>
+            <td>
+                <button class="btn btn-primary btn-sm" onclick="showDetail(${item.id})"><i class="bi bi-eye"></i></button>
+                ${!item.is_processed ? `<button class="btn btn-success btn-sm" onclick="singleMarkProcessed(${item.id})"><i class="bi bi-check"></i></button>` : ''}
+            </td>
+        </tr>`;
+    }).join('');
+}
+
+function renderPagination(page, totalPages, total) {
+    document.getElementById('paginationInfo').textContent = '共 ' + total + ' 条';
+    const box = document.getElementById('paginationBox');
+    if (totalPages <= 1) { box.innerHTML = ''; return; }
+
+    let html = '<ul class="pagination">';
+    html += `<li class="page-item ${page <= 1 ? 'disabled' : ''}"><a class="page-link" href="javascript:;" onclick="loadList(${page - 1})">&laquo;</a></li>`;
+    for (let i = 1; i <= totalPages; i++) {
+        if (i === 1 || i === totalPages || (i >= page - 2 && i <= page + 2)) {
+            html += `<li class="page-item ${i === page ? 'active' : ''}"><a class="page-link" href="javascript:;" onclick="loadList(${i})">${i}</a></li>`;
+        } else if (i === page - 3 || i === page + 3) {
+            html += '<li class="page-item disabled"><a class="page-link">…</a></li>';
+        }
+    }
+    html += `<li class="page-item ${page >= totalPages ? 'disabled' : ''}"><a class="page-link" href="javascript:;" onclick="loadList(${page + 1})">&raquo;</a></li>`;
+    html += '</ul>';
+    box.innerHTML = html;
+}
+
+function toggleCheckAll() {
+    const checked = document.getElementById('checkAll').checked;
+    document.querySelectorAll('.row-check').forEach(cb => cb.checked = checked);
+    updateSelected();
+}
+
+function updateSelected() {
+    selectedIds = Array.from(document.querySelectorAll('.row-check:checked')).map(cb => parseInt(cb.value));
+    document.getElementById('checkAll').checked = selectedIds.length > 0 && selectedIds.length === document.querySelectorAll('.row-check').length;
+}
+
+async function showDetail(id) {
+    modalCurrentId = id;
+    const res = await fetch('/message/detail?id=' + id);
+    const json = await res.json();
+    if (json.code !== 0) { showToast('加载详情失败', 'danger'); return; }
+
+    const d = json.data;
+    const atListStr = Array.isArray(d.at_list) && d.at_list.length > 0 ? d.at_list.join(', ') : '-';
+    const rawDataStr = JSON.stringify(d.raw_data, null, 2);
+
+    document.getElementById('detailContent').innerHTML = `
+        <div class="detail-row"><div class="detail-label">消息ID</div><div class="detail-value"><code>${escapeHtml(d.msg_id || '-')}</code></div></div>
+        <div class="detail-row"><div class="detail-label">GUID</div><div class="detail-value"><code>${escapeHtml(d.guid || '-')}</code></div></div>
+        <div class="detail-row"><div class="detail-label">发送者</div><div class="detail-value">${escapeHtml(d.sender_name || '-')} (${escapeHtml(d.sender || '-')})</div></div>
+        <div class="detail-row"><div class="detail-label">接收者</div><div class="detail-value"><code>${escapeHtml(d.receiver || '-')}</code></div></div>
+        <div class="detail-row"><div class="detail-label">群ID</div><div class="detail-value"><code>${escapeHtml(d.room_id || '-')}</code></div></div>
+        <div class="detail-row"><div class="detail-label">消息类型</div><div class="detail-value"><span class="msg-type-badge"><i class="bi ${msgTypeIcons[d.content_type] || 'bi-chat-left'}"></i> ${d.content_type_text}</span></div></div>
+        <div class="detail-row"><div class="detail-label">处理状态</div><div class="detail-value"><span class="processed-badge ${d.is_processed ? 'processed-yes' : 'processed-no'}">${d.is_processed_text}</span></div></div>
+        <div class="detail-row"><div class="detail-label">发送时间</div><div class="detail-value">${d.send_time_text || '-'}</div></div>
+        <div class="detail-row"><div class="detail-label">处理时间</div><div class="detail-value">${d.processed_at_text || '-'}</div></div>
+        <div class="detail-row"><div class="detail-label">@成员</div><div class="detail-value">${escapeHtml(atListStr)}</div></div>
+        <div class="detail-row"><div class="detail-label">引用内容</div><div class="detail-value">${escapeHtml(d.quote_content || '-')}</div></div>
+        <div class="detail-row"><div class="detail-label">消息内容</div><div class="detail-value">${escapeHtml(d.content || '-')}</div></div>
+        <div class="detail-row"><div class="detail-label">原始数据</div><div class="detail-value pre">${escapeHtml(rawDataStr)}</div></div>
+    `;
+
+    const markBtn = document.getElementById('modalMarkBtn');
+    if (d.is_processed) {
+        markBtn.style.display = 'none';
+    } else {
+        markBtn.style.display = '';
+    }
+
+    detailModal.show();
+}
+
+async function singleMarkProcessed(id) {
+    const res = await fetch('/message/mark-processed', { method: 'POST', headers: {'Content-Type':'application/x-www-form-urlencoded'}, body: 'id=' + id });
+    const json = await res.json();
+    if (json.code === 0) {
+        showToast('已标记为已处理', 'success');
+        loadList(currentPage);
+    } else {
+        showToast(json.msg, 'danger');
+    }
+}
+
+async function markFromModal() {
+    if (!modalCurrentId) return;
+    await fetch('/message/mark-processed', { method: 'POST', headers: {'Content-Type':'application/x-www-form-urlencoded'}, body: 'id=' + modalCurrentId });
+    detailModal.hide();
+    showToast('已标记为已处理', 'success');
+    loadList(currentPage);
+}
+
+async function batchMarkProcessed() {
+    if (selectedIds.length === 0) { showToast('请先选择要操作的数据', 'warning'); return; }
+    if (!confirm('确定要批量标记选中的 ' + selectedIds.length + ' 条记录为已处理吗？')) return;
+    const res = await fetch('/message/batch-mark-processed', { method: 'POST', headers: {'Content-Type':'application/x-www-form-urlencoded'}, body: 'ids=' + selectedIds.join(',') });
+    const json = await res.json();
+    if (json.code === 0) {
+        showToast('批量标记成功', 'success');
+        selectedIds = [];
+        loadList(currentPage);
+    } else {
+        showToast(json.msg, 'danger');
+    }
+}
+
+function resetFilter() {
+    document.getElementById('keyword').value = '';
+    document.getElementById('guid').value = '';
+    document.getElementById('roomId').value = '';
+    document.getElementById('sender').value = '';
+    document.getElementById('isProcessed').value = '';
+    document.getElementById('contentType').value = '';
+    loadList(1);
+}
+
+function showToast(msg, type = 'info') {
+    const id = 'toast-' + Date.now();
+    const bg = { success: 'bg-success text-white', danger: 'bg-danger text-white', warning: 'bg-warning text-dark', info: 'bg-info text-white' };
+    const icons = { success: 'bi-check-circle-fill', danger: 'bi-exclamation-circle-fill', warning: 'bi-exclamation-triangle-fill', info: 'bi-info-circle-fill' };
+    document.getElementById('toastContainer').innerHTML += `
+        <div class="toast align-items-center ${bg[type]} border-0" id="${id}" role="alert">
+            <div class="d-flex">
+                <div class="toast-body"><i class="bi ${icons[type]} me-2"></i>${msg}</div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+            </div>
+        </div>`;
+    const el = document.getElementById(id);
+    const toast = new bootstrap.Toast(el, { delay: 3000 });
+    toast.show();
+    el.addEventListener('hidden.bs.toast', () => el.remove());
+}
+
+function escapeHtml(str) {
+    if (str === null || str === undefined) return '';
+    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+</script>
+</body>
+</html>

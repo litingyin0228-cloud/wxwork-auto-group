@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>联系人列表 - 管理后台</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <style>
+        :root {
+            --primary: #4f46e5;
+            --primary-hover: #4338ca;
+            --bg-page: #f0f2f5;
+            --bg-card: #ffffff;
+            --text-main: #1f2937;
+            --text-muted: #6b7280;
+            --border: #e5e7eb;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: var(--bg-page);
+            color: var(--text-main);
+            min-height: 100vh;
+        }
+        .sidebar {
+            position: fixed;
+            left: 0; top: 0; bottom: 0;
+            width: 240px;
+            background: var(--primary);
+            color: #fff;
+            display: flex;
+            flex-direction: column;
+            z-index: 100;
+        }
+        .sidebar-brand {
+            padding: 24px 20px;
+            font-size: 18px;
+            font-weight: 700;
+            border-bottom: 1px solid rgba(255,255,255,0.15);
+            letter-spacing: 0.5px;
+        }
+        .sidebar-nav { flex: 1; padding: 12px 0; }
+        .sidebar-nav a {
+            display: flex; align-items: center;
+            padding: 12px 20px;
+            color: rgba(255,255,255,0.75);
+            text-decoration: none;
+            font-size: 14px;
+            transition: all 0.2s;
+            gap: 10px;
+        }
+        .sidebar-nav a i { font-size: 16px; width: 20px; text-align: center; }
+        .sidebar-nav a:hover, .sidebar-nav a.active {
+            background: rgba(255,255,255,0.12);
+            color: #fff;
+        }
+        .main-content { margin-left: 240px; min-height: 100vh; }
+        .topbar {
+            background: var(--bg-card);
+            border-bottom: 1px solid var(--border);
+            padding: 16px 28px;
+            display: flex; align-items: center; justify-content: space-between;
+        }
+        .topbar h1 { font-size: 20px; font-weight: 600; }
+        .topbar .badge-pending {
+            background: #fef3c7; color: #92400e;
+            font-size: 12px; padding: 3px 10px;
+            border-radius: 20px; margin-left: 10px;
+        }
+        .page-body { padding: 28px; }
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+        }
+        .card-header {
+            background: none;
+            border-bottom: 1px solid var(--border);
+            padding: 16px 24px;
+            font-size: 15px;
+            font-weight: 600;
+            display: flex; align-items: center; justify-content: space-between;
+        }
+        .card-body { padding: 20px 24px; }
+        .filter-bar { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+        .filter-bar .form-control,
+        .filter-bar .form-select {
+            border-radius: 8px; font-size: 13px;
+            border-color: var(--border);
+            padding: 7px 12px;
+            height: auto;
+        }
+        .filter-bar .form-control:focus,
+        .filter-bar .form-select:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(79,70,229,0.1);
+        }
+        .btn { border-radius: 8px; font-size: 13px; padding: 7px 16px; }
+        .btn-primary { background: var(--primary); border-color: var(--primary); }
+        .btn-primary:hover { background: var(--primary-hover); border-color: var(--primary-hover); }
+        .btn-sm { padding: 4px 10px; font-size: 12px; }
+        .btn-success { background: #10b981; border-color: #10b981; }
+        .btn-success:hover { background: #059669; border-color: #059669; }
+        .btn-danger { background: #ef4444; border-color: #ef4444; }
+        .btn-danger:hover { background: #dc2626; border-color: #dc2626; }
+        .btn-outline-secondary { border-color: var(--border); color: var(--text-muted); }
+        .btn-outline-secondary:hover { background: var(--bg-page); border-color: var(--border); color: var(--text-main); }
+        table { margin: 0; }
+        thead th {
+            font-size: 12px; font-weight: 600; color: var(--text-muted);
+            text-transform: uppercase; letter-spacing: 0.5px;
+            border-bottom: 2px solid var(--border);
+            padding: 12px 16px;
+            background: #fafafa;
+        }
+        tbody td {
+            font-size: 13px; vertical-align: middle;
+            padding: 14px 16px;
+            border-bottom: 1px solid var(--border);
+        }
+        tbody tr:last-child td { border-bottom: none; }
+        tbody tr:hover { background: #f9fafb; }
+        .avatar {
+            width: 36px; height: 36px;
+            border-radius: 50%;
+            object-fit: cover;
+            background: var(--bg-page);
+            display: flex; align-items: center; justify-content: center;
+            color: var(--text-muted);
+            font-size: 14px; font-weight: 600;
+            overflow: hidden;
+        }
+        .avatar img { width: 100%; height: 100%; object-fit: cover; }
+        .user-info { display: flex; align-items: center; gap: 10px; }
+        .user-name { font-weight: 500; }
+        .user-id { font-size: 11px; color: var(--text-muted); }
+        .status-badge {
+            display: inline-flex; align-items: center; gap: 4px;
+            padding: 3px 10px; border-radius: 20px; font-size: 12px; font-weight: 500;
+        }
+        .status-pending { background: #fef3c7; color: #92400e; }
+        .status-agreed { background: #d1fae5; color: #065f46; }
+        .status-rejected { background: #fee2e2; color: #991b1b; }
+        .status-deleted { background: #f3f4f6; color: #6b7280; }
+        .sex-male { color: #3b82f6; }
+        .sex-female { color: #ec4899; }
+        .reason-text {
+            max-width: 200px;
+            overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+            color: var(--text-muted);
+        }
+        .table-responsive { border-radius: 8px; overflow: hidden; }
+        .pagination-wrap { display: flex; justify-content: space-between; align-items: center; margin-top: 16px; }
+        .pagination-info { font-size: 13px; color: var(--text-muted); }
+        .pagination { margin: 0; gap: 4px; }
+        .pagination .page-link {
+            border-radius: 8px; font-size: 13px;
+            border-color: var(--border);
+            color: var(--text-main);
+            padding: 6px 12px;
+        }
+        .pagination .page-item.active .page-link {
+            background: var(--primary); border-color: var(--primary);
+        }
+        .pagination .page-link:hover { background: var(--bg-page); }
+        .table-checkbox { width: 18px; height: 18px; cursor: pointer; }
+        .modal-header { border-color: var(--border); }
+        .modal-footer { border-color: var(--border); }
+        .form-label { font-size: 13px; font-weight: 500; margin-bottom: 4px; }
+        .toast-container { position: fixed; top: 20px; right: 20px; z-index: 9999; }
+        .toast .toast-header { font-size: 13px; }
+        .toast .toast-body { font-size: 13px; }
+        @media (max-width: 768px) {
+            .sidebar { width: 200px; }
+            .main-content { margin-left: 200px; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="sidebar">
+    <div class="sidebar-brand">
+        <i class="bi bi-robot me-2"></i>企微自动群管理
+    </div>
+    <nav class="sidebar-nav">
+        <a href="/"><i class="bi bi-house"></i> 首页</a>
+        <a href="/admin/group-logs"><i class="bi bi-people"></i> 建群日志</a>
+        <a href="/contact/index" class="active"><i class="bi bi-person-lines-fill"></i> 联系人列表</a>
+        <a href="/message/index"><i class="bi bi-chat-left-text"></i> 消息列表</a>
+    </nav>
+</div>
+
+<div class="main-content">
+    <div class="topbar">
+        <h1>
+            <i class="bi bi-person-lines-fill" style="color:var(--primary)"></i>
+            联系人列表
+            <span class="badge-pending" id="pendingBadge" style="display:none">
+                <i class="bi bi-bell"></i> <span id="pendingCount">0</span> 待处理
+            </span>
+        </h1>
+        <div>
+            <button class="btn btn-success btn-sm" onclick="batchAction('agree')">
+                <i class="bi bi-check-circle"></i> 批量同意
+            </button>
+            <button class="btn btn-danger btn-sm" onclick="batchAction('reject')">
+                <i class="bi bi-x-circle"></i> 批量拒绝
+            </button>
+        </div>
+    </div>
+
+    <div class="page-body">
+        <div class="card">
+            <div class="card-header">
+                <span><i class="bi bi-funnel"></i> 筛选条件</span>
+            </div>
+            <div class="card-body">
+                <div class="filter-bar">
+                    <input type="text" class="form-control" id="keyword" placeholder="姓名 / 用户ID / 申请理由" style="width:200px" onkeydown="if(event.key==='Enter')loadList()">
+                    <select class="form-select" id="status" style="width:120px">
+                        <option value="">全部状态</option>
+                        <option value="0">待处理</option>
+                        <option value="1">已同意</option>
+                        <option value="2">已拒绝</option>
+                        <option value="3">已删除</option>
+                    </select>
+                    <select class="form-select" id="type" style="width:120px">
+                        <option value="">全部类型</option>
+                    </select>
+                    <button class="btn btn-primary" onclick="loadList()">
+                        <i class="bi bi-search"></i> 搜索
+                    </button>
+                    <button class="btn btn-outline-secondary" onclick="resetFilter()">
+                        <i class="bi bi-arrow-counterclockwise"></i> 重置
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="card mt-3">
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table mb-0">
+                        <thead>
+                            <tr>
+                                <th style="width:40px"><input type="checkbox" class="table-checkbox" id="checkAll" onchange="toggleCheckAll()"></th>
+                                <th>用户</th>
+                                <th>企业信息</th>
+                                <th>性别</th>
+                                <th>状态</th>
+                                <th>申请理由</th>
+                                <th>来源</th>
+                                <th>申请时间</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tableBody">
+                            <tr><td colspan="9" class="text-center text-muted py-5">
+                                <i class="bi bi-hourglass-split fs-4 d-block mb-2"></i>加载中...
+                            </td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="pagination-wrap px-4 pb-3">
+                    <div class="pagination-info" id="paginationInfo">共 0 条</div>
+                    <div id="paginationBox"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="toast-container" id="toastContainer"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+let currentPage = 1;
+let selectedIds = [];
+
+async function loadList(page = 1) {
+    currentPage = page;
+    const params = new URLSearchParams({
+        page,
+        limit: 20,
+        keyword: document.getElementById('keyword').value,
+        status: document.getElementById('status').value,
+        type: document.getElementById('type').value,
+    });
+
+    const res = await fetch('/contact/list?' + params);
+    const json = await res.json();
+    if (json.code !== 0) { showToast('加载失败: ' + json.msg, 'danger'); return; }
+
+    renderTable(json.data);
+    renderPagination(json.data.page, Math.ceil(json.data.total / json.data.limit), json.data.total);
+}
+
+function renderTable(data) {
+    const tbody = document.getElementById('tableBody');
+    if (!data.list || data.list.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted py-5"><i class="bi bi-inbox fs-4 d-block mb-2"></i>暂无数据</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = data.list.map(item => {
+        const initials = item.name ? item.name.charAt(0).toUpperCase() : '?';
+        const statusClass = 'status-' + (item.status === 0 ? 'pending' : item.status === 1 ? 'agreed' : item.status === 2 ? 'rejected' : 'deleted');
+        return `<tr data-id="${item.id}">
+            <td><input type="checkbox" class="table-checkbox row-check" value="${item.id}" ${selectedIds.includes(item.id) ? 'checked' : ''} onchange="updateSelected()"></td>
+            <td>
+                <div class="user-info">
+                    <div class="avatar">${item.avatar ? '<img src="'+item.avatar+'" alt="'+item.name+'">' : initials}</div>
+                    <div>
+                        <div class="user-name">${escapeHtml(item.name || '未知')}</div>
+                        <div class="user-id">${escapeHtml(item.user_id || '-')}</div>
+                    </div>
+                </div>
+            </td>
+            <td>
+                <div style="font-size:13px">${escapeHtml(item.corp_name || '-')}</div>
+                <div class="user-id">${escapeHtml(item.corp_short_name || '-')}</div>
+            </td>
+            <td>${item.sex == 1 ? '<span class="sex-male"><i class="bi bi-gender-male"></i> 男</span>' : item.sex == 2 ? '<span class="sex-female"><i class="bi bi-gender-female"></i> 女</span>' : '-'}</td>
+            <td><span class="status-badge ${statusClass}">${item.status_text}</span></td>
+            <td><span class="reason-text" title="${escapeHtml(item.apply_reason || '')}">${escapeHtml(item.apply_reason || '-')}</span></td>
+            <td style="font-size:12px;color:var(--text-muted)">${escapeHtml(item.source_type || '-')}</td>
+            <td style="font-size:12px">${item.add_time_text || '-'}</td>
+            <td>
+                ${item.status === 0 ? `
+                <button class="btn btn-success btn-sm" onclick="singleAction(${item.id}, 'agree')"><i class="bi bi-check"></i></button>
+                <button class="btn btn-danger btn-sm" onclick="singleAction(${item.id}, 'reject')"><i class="bi bi-x"></i></button>
+                ` : `<span style="font-size:12px;color:var(--text-muted)">-</span>`}
+            </td>
+        </tr>`;
+    }).join('');
+}
+
+function renderPagination(page, totalPages, total) {
+    document.getElementById('paginationInfo').textContent = '共 ' + total + ' 条';
+    const box = document.getElementById('paginationBox');
+    if (totalPages <= 1) { box.innerHTML = ''; return; }
+
+    let html = '<ul class="pagination">';
+    html += `<li class="page-item ${page <= 1 ? 'disabled' : ''}"><a class="page-link" href="javascript:;" onclick="loadList(${page - 1})">&laquo;</a></li>`;
+    for (let i = 1; i <= totalPages; i++) {
+        if (i === 1 || i === totalPages || (i >= page - 2 && i <= page + 2)) {
+            html += `<li class="page-item ${i === page ? 'active' : ''}"><a class="page-link" href="javascript:;" onclick="loadList(${i})">${i}</a></li>`;
+        } else if (i === page - 3 || i === page + 3) {
+            html += '<li class="page-item disabled"><a class="page-link">…</a></li>';
+        }
+    }
+    html += `<li class="page-item ${page >= totalPages ? 'disabled' : ''}"><a class="page-link" href="javascript:;" onclick="loadList(${page + 1})">&raquo;</a></li>`;
+    html += '</ul>';
+    box.innerHTML = html;
+}
+
+function toggleCheckAll() {
+    const checked = document.getElementById('checkAll').checked;
+    document.querySelectorAll('.row-check').forEach(cb => cb.checked = checked);
+    updateSelected();
+}
+
+function updateSelected() {
+    selectedIds = Array.from(document.querySelectorAll('.row-check:checked')).map(cb => parseInt(cb.value));
+    document.getElementById('checkAll').checked = selectedIds.length > 0 && selectedIds.length === document.querySelectorAll('.row-check').length;
+}
+
+async function singleAction(id, action) {
+    const url = action === 'agree' ? '/contact/agree' : '/contact/reject';
+    const res = await fetch(url, { method: 'POST', headers: {'Content-Type':'application/x-www-form-urlencoded'}, body: 'id=' + id });
+    const json = await res.json();
+    if (json.code === 0) {
+        showToast(action === 'agree' ? '已同意' : '已拒绝', 'success');
+        loadList(currentPage);
+        loadPendingCount();
+    } else {
+        showToast(json.msg, 'danger');
+    }
+}
+
+async function batchAction(action) {
+    if (selectedIds.length === 0) { showToast('请先选择要操作的数据', 'warning'); return; }
+    if (!confirm('确定要批量' + (action === 'agree' ? '同意' : '拒绝') + '选中的 ' + selectedIds.length + ' 条记录吗？')) return;
+    const url = action === 'agree' ? '/contact/batch-agree' : '/contact/batch-reject';
+    const res = await fetch(url, { method: 'POST', headers: {'Content-Type':'application/x-www-form-urlencoded'}, body: 'ids=' + selectedIds.join(',') });
+    const json = await res.json();
+    if (json.code === 0) {
+        showToast((action === 'agree' ? '批量同意' : '批量拒绝') + '成功', 'success');
+        selectedIds = [];
+        loadList(currentPage);
+        loadPendingCount();
+    } else {
+        showToast(json.msg, 'danger');
+    }
+}
+
+async function loadPendingCount() {
+    const res = await fetch('/contact/pending-count');
+    const json = await res.json();
+    if (json.code === 0 && json.data.count > 0) {
+        document.getElementById('pendingBadge').style.display = 'inline-flex';
+        document.getElementById('pendingCount').textContent = json.data.count;
+    } else {
+        document.getElementById('pendingBadge').style.display = 'none';
+    }
+}
+
+function resetFilter() {
+    document.getElementById('keyword').value = '';
+    document.getElementById('status').value = '';
+    document.getElementById('type').value = '';
+    loadList(1);
+}
+
+function showToast(msg, type = 'info') {
+    const id = 'toast-' + Date.now();
+    const colors = { success: 'text-success', danger: 'text-danger', warning: 'text-warning', info: 'text-info' };
+    const icons = { success: 'bi-check-circle-fill', danger: 'bi-exclamation-circle-fill', warning: 'bi-exclamation-triangle-fill', info: 'bi-info-circle-fill' };
+    const bg = { success: 'bg-success text-white', danger: 'bg-danger text-white', warning: 'bg-warning text-dark', info: 'bg-info text-white' };
+    document.getElementById('toastContainer').innerHTML += `
+        <div class="toast align-items-center ${bg[type]} border-0" id="${id}" role="alert">
+            <div class="d-flex">
+                <div class="toast-body"><i class="bi ${icons[type]} me-2"></i>${msg}</div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+            </div>
+        </div>`;
+    const el = document.getElementById(id);
+    const toast = new bootstrap.Toast(el, { delay: 3000 });
+    toast.show();
+    el.addEventListener('hidden.bs.toast', () => el.remove());
+}
+
+function escapeHtml(str) {
+    if (str === null || str === undefined) return '';
+    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+document.addEventListener('DOMContentLoaded', () => { loadList(1); loadPendingCount(); });
+</script>
+</body>
+</html>

@@ -36,43 +36,6 @@ class AutoGroupService
         return self::$juhebotService;
     }
 
-    /**
-     * 同步联系人
-     */
-    protected function syncApplyContact()
-    {
-        $seq = Cache::get('last_apply_seq');
-        // 同步好友申请
-        $contactList = $this->getJuhebot()->syncApplyContact($seq);
-        
-        LogService::info([
-            'tag'     => 'AutoGroup',
-            'message' => '自动同步好友申请',
-            'data'    => $contactList,
-        ]);
-        if (empty($contactList['data']['contact_list'])) {
-            return;
-        }
-        $insertCount = 0;
-        
-        Cache::set('last_apply_seq', $contactList['data']['last_seq']); // 缓存SEQ
-        foreach ($contactList['data']['contact_list'] as $contact) {
-            if (ApplyContactList::where("user_id",$contact['user_id'])->count() > 0) {
-                continue;
-            }
-            // 处理每个联系人
-            $insertData = $contact;
-            $insertData['extend_info_desc'] = $contact['extend_info']['desc'];
-            $insertData['extend_info_remark'] = $contact['extend_info']['desc'];
-            $insertData['extend_info_company_remark'] = $contact['extend_info']['desc'];
-            $insertData['extend_info_remark_time'] = $contact['extend_info']['desc'];
-            $insertData['extend_info_remark_url'] = $contact['extend_info']['desc'];
-            ApplyContactList::create($contact);
-            $insertCount++;
-        }
-        return $insertCount;
-    }
-
     // // 处理新客户事件- 同步好友申请
     // public function handleNewCustomerV2()
     // {
@@ -101,6 +64,7 @@ class AutoGroupService
     {
         $staffUserId    = $event['UserID']         ?? '';
         $externalUserId = $event['ExternalUserID'] ?? '';
+        $mobile = $event['State'] ?? '';
 
         if (empty($staffUserId) || empty($externalUserId)) {
             LogService::warning([
@@ -119,69 +83,76 @@ class AutoGroupService
                 'customer' => $externalUserId,
             ],
         ]);
-
-        // 1、同步信息
-        // $this->syncApplyContact();
-
-        // 1. 获取客户详情（昵称等）
-        $customerName = $this->resolveCustomerName($externalUserId);
-
-        // 2. 生成群名称
-        $groupName = str_replace('{name}', $customerName, $this->config['name_tpl']);
-
-        // 3. 构建群成员列表：群主 + 跟进员工 + 客服成员
-        $owner   = $this->config['owner'] ?: $staffUserId;
-        $members = array_values(array_unique(array_merge(
-            [$owner, $staffUserId],
-            $this->config['members']
-        )));
-
-        // 企业微信规定：成员数至少 2 人（含群主）
-        if (count($members) < 2) {
-            $members[] = $staffUserId; // 兜底：加入跟进员工
-            $members   = array_values(array_unique($members));
-        }
-
-        // 把外部联系人加入到 members
-        $members[] = $externalUserId;
-
-        // 4. 创建群聊
         try {
-            $result  = $this->wxWork->createGroupChat($groupName, $owner, $members);
-            $chatId  = $result['chatid'];
+            // 1. 获取客户详情（昵称等）
+            $customerName = $this->resolveCustomerName($externalUserId);
 
-            // 5. 发送欢迎语（可选）
-            $welcomeMsg = $this->config['welcome_msg'];
-            if (!empty($welcomeMsg)) {
-                $this->wxWork->sendGroupMessage($chatId, $welcomeMsg);
-            }
-
-            LogService::info([
-                'tag'     => 'AutoGroup',
-                'message' => '建群完成',
-                'data'    => [
-                    'chatid'   => $chatId,
-                    'name'     => $groupName,
-                    'customer' => $externalUserId,
-                ],
-            ]);
-
-            // 6. 记录日志到数据库
             $this->saveLog([
                 'external_userid' => $externalUserId,
                 'staff_userid'    => $staffUserId,
                 'customer_name'   => $customerName,
-                'chat_id'         => $chatId,
-                'group_name'      => $groupName,
+                'chat_id'         => '',
+                'group_name'      => '暂无群聊',
                 'status'          => 1,
                 'error_msg'       => '',
+                'mobile'          => $mobile ?? '',
             ]);
+        
+
+        // // 2. 生成群名称
+        // $groupName = str_replace('{name}', $customerName, $this->config['name_tpl']);
+
+        // // 3. 构建群成员列表：群主 + 跟进员工 + 客服成员
+        // $owner   = $this->config['owner'] ?: $staffUserId;
+        // $members = array_values(array_unique(array_merge(
+        //     [$owner, $staffUserId],
+        //     $this->config['members']
+        // )));
+
+        // // 企业微信规定：成员数至少 2 人（含群主）
+        // if (count($members) < 2) {
+        //     $members[] = $staffUserId; // 兜底：加入跟进员工
+        //     $members   = array_values(array_unique($members));
+        // }
+
+        // // 把外部联系人加入到 members
+        // $members[] = $externalUserId;
+
+        // // 4. 创建群聊
+        // try {
+        //     $result  = $this->wxWork->createGroupChat($groupName, $owner, $members);
+        //     $chatId  = $result['chatid'];
+
+        //     // 5. 发送欢迎语（可选）
+        //     $welcomeMsg = $this->config['welcome_msg'];
+        //     if (!empty($welcomeMsg)) {
+        //         $this->wxWork->sendGroupMessage($chatId, $welcomeMsg);
+        //     }
+
+        //     LogService::info([
+        //         'tag'     => 'AutoGroup',
+        //         'message' => '建群完成',
+        //         'data'    => [
+        //             'chatid'   => $chatId,
+        //             'name'     => $groupName,
+        //             'customer' => $externalUserId,
+        //         ],
+        //     ]);
+
+        //     // 6. 记录日志到数据库
+        //     $this->saveLog([
+        //         'external_userid' => $externalUserId,
+        //         'staff_userid'    => $staffUserId,
+        //         'customer_name'   => $customerName,
+        //         'chat_id'         => $chatId,
+        //         'group_name'      => $groupName,
+        //         'status'          => 1,
+        //         'error_msg'       => '',
+        //     ]);
 
             return [
                 'success'   => true,
-                'chatid'    => $chatId,
-                'groupName' => $groupName,
-                'members'   => $members,
+                'msg'       => '事件处理成功',
             ];
         } catch (\Throwable $e) {
             LogService::error([
@@ -214,7 +185,7 @@ class AutoGroupService
     private function saveLog(array $data): void
     {
         try {
-            Db::table('group_chat_log')->insert($data);
+            Db::table('wxwork_group_chat_log')->insert($data);
         } catch (\Throwable $e) {
             LogService::warning([
                 'tag'     => 'AutoGroup',

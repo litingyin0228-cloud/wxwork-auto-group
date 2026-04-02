@@ -114,11 +114,10 @@ class WxWorkCallbackController
         $changeType = $event['ChangeType'] ?? '';
 
         LogService::info([
-            'tag'     => 'Callback',
+            'tag'     => 'WxWorkCallbackController',
             'message' => '收到事件',
             'data'    => [
-                'event'       => $eventType,
-                'change_type' => $changeType,
+                'event'       => $event,
             ],
         ]);
 

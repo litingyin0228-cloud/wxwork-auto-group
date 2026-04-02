@@ -184,6 +184,53 @@ class WxWorkService
         return $res['external_contact'] ?? [];
     }
 
+    /**
+     * 获取客户列表
+     */
+    public function getExternalContactList($limit = 1000): array
+    {
+        $token = $this->getAccessToken('contact');
+        $body = [
+            'cursor'   => '',
+            'limit'    => $limit,
+        ];
+
+        $res = $this->post('externalcontact/groupchat/list?access_token=' . $token, $body);
+
+        if ($res['errcode'] !== 0) {
+            LogService::error([
+                'tag'     => 'WxWork',
+                'message' => '获取客户列表失败',
+                'data'    => $res,
+            ]);
+            return [];
+        }
+
+        return $res ?? [];
+    }
+
+    // https://qyapi.weixin.qq.com/cgi-bin/externalcontact/add_contact_way?access_token=ACCESS_TOKEN
+    public function addContactWay($state): array
+    {
+        $token = $this->getAccessToken('contact');
+        $body = [
+            "type" =>1,
+            "scene"=>2,
+            "state"=>$state,
+            "user"=>["XiaoKe"],
+        ];
+        $res = $this->post('externalcontact/add_contact_way?access_token=' . $token, $body);
+        LogService::error([
+            'tag'     => 'WxWork',
+            'message' => '添加联系人方式返回信息',
+            'state'   => $state,
+            'res'     => $res,
+        ]);
+        return $res;
+    }
+
+
+
     // ─────────────────────────────────────────────
     // HTTP 工具方法
     // ─────────────────────────────────────────────
