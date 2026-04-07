@@ -281,6 +281,8 @@ class RoomCreated
             // 根据热词库中的内容进行回复
             // $this->getJuhebot()->sendText("R:".$roomId, "#你好我是群智能助手，欢迎使用一键零申报，您的请求已收到，请稍后查看结果。");
             $this->getJuhebot()->sendWeApp("R:".$roomId);
+        } else {
+            $this->getJuhebot()->sendText("R:".$roomId, "#你好我是群智能助手，欢迎使用一键零申报，这个技能我还没有学会。");
         }
     }
 }

@@ -520,7 +520,7 @@ class JuhebotService
         if (($res['error_code'] ?? -1) !== 0) {
             $res['data']['qr_code'] = $default_qr_code;
         } else {
-            $res['data']['qr_code'] = urldecode($res['data']['image_url']);
+            $res['data']['qr_code'] = base64_decode($res['data']['image_url']);
         }
         LogService::info([
             'tag'     => 'Juhebot',

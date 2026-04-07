@@ -185,12 +185,15 @@ class AutoGroupService
     private function saveLog(array $data): void
     {
         try {
+            if (Db::table('wxwork_group_chat_log')->where('external_userid', $data['external_userid'])->limit(1)->find()) {
+                return;
+            }
             Db::table('wxwork_group_chat_log')->insert($data);
         } catch (\Throwable $e) {
-            LogService::warning([
+            LogService::error([
                 'tag'     => 'AutoGroup',
                 'message' => '日志写入失败',
-                'data'    => ['error' => $e->getMessage()],
+                'data'    => ['error' => $e->getMessage(), 'data' => $data],
             ]);
         }
     }

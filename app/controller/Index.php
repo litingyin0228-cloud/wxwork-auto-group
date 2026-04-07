@@ -63,7 +63,7 @@ class Index extends BaseController
             $notifyType = $params['notify_type'] ?? 0;
             $data = $params['data'] ?? [];
 
-            // notify_type = 2132 建群回调
+            // notify_type = 2132 建群回调 
             // 触发建群回调事件
             Event::trigger('RoomCreated', [
                 'guid'        => $guid,

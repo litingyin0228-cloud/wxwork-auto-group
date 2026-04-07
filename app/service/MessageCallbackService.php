@@ -165,9 +165,10 @@ class MessageCallbackService
 
         // 3、发送欢迎语
         $roomId = $roomResult['data']['roomid'] ?? '';
+        $content =  "您好，欢迎咨询一键零申报！\n\n✨ 让报税，像点外卖一样简单！\n我们专注为全国小微企业、个体工商户，提供智能、合规、极简的一站式财税服务。\n\n 💰 服务价格 · 清晰透明\n\n小规模纳税人 / 个体工商户：\n1️⃣ 自助申报：0 元/年（不含工商税务年报）\n2️⃣ 托管申报（全程代办）：360 元/年\n\n一般纳税人：\n1️⃣零申报 ：360 元/年\n2️⃣非零申报 ：998 元/年\n\n一键开票：199 元/年（电子发票）";
         $this->juhebot->sendText(
             'R:' . $roomId,
-            $senderName . ' 欢迎加入群聊，我们将为您提供专业的一对一服务。'
+            $content
         );
 
         LogService::info([
@@ -235,7 +236,7 @@ class MessageCallbackService
 
         sleep(rand(1, 5));
 
-        $roomName = $this->getRoomName($apply) ?? '';
+        $roomName = $this->getRoomName($apply) ?: ($apply['name'] ?? '');
 
         $this->juhebot->modifyRoomName($roomId, "一键零申报&{$roomName}");
 
@@ -261,12 +262,34 @@ class MessageCallbackService
     public function getRoomName($apply): string
     {
         if (!$apply['bind_org_id']) {
-            return $apply['name'] ?? '';
+            // 没找到的话可以再去查询一下
+            $bind_org_id = $this->updateApplyContact($apply['name']);
+            if (!$bind_org_id) {
+                return $apply['name'] ?? '';
+            }
+            $apply['bind_org_id'] = $bind_org_id;
         }
         $orgName = Db::table("tax_org")->where("tax_id", $apply['bind_org_id'])->value("name");
-        if (!$orgName) {
-            return $orgName;
+        return $orgName ?: ($apply['name'] ?? '');
+    }
+
+    /**
+     * 强制更新一波
+     */
+    private function updateApplyContact($name): string
+    {
+        $contact = Db::table("wxwork_group_chat_log")->where("customer_name", $name)
+        ->where("mobile", "!=", "")
+        ->limit(1)->find();
+        if ($contact && $contact['mobile']) {
+            $apply = ApplyContactList::where("name", $name)->limit(1)->find();
+            if ($apply) {
+                $apply['mobile'] = $contact['mobile'];
+                $apply['bind_org_id'] = Db::table("tax_members")->where("phone", $contact['mobile'])->value("org_id") ?? '';
+                $apply->save();
+                return $apply['bind_org_id'];
+            }
         }
-        return $apply['name'];
+        return '';
     }
 }

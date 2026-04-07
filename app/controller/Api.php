@@ -25,6 +25,7 @@ class Api extends BaseController
         // Jieba::init();
         // Finalseg::init();
         // $res = Jieba::cut($content);
+        echo base64_decode("aHR0cHM6Ly93ZXdvcmsucXBpYy5jbi93d3BpYzNhei84ODQ1MjJfeXNnbmtoRUhTUk9Zek9uXzE3NzUwODY2ODAvMA==");
 
         $service = new WxWorkService();
         $res = $service->addContactWay("");
