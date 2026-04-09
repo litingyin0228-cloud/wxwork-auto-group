@@ -17,6 +17,27 @@ class MessageCallbackService
 {
     private JuhebotService $juhebot;
 
+    private const DEFAULT_USER_LIST = [
+        '7881300953909122',
+        '1688857676604016',
+        '1688858005772698',
+        '1688858160817011',
+        '1688853366655965',
+        '1688853366477816',
+        '1688853366477841',
+        '1688853366478174'
+    ];
+
+    private const SERVICE_USER_MAP = [
+        '1688853366477843' => '唐平',
+        '1688854521689720' => '阳兰',
+        '1688853366477834' => '钟玲',
+        '1688853366477841' => '张娜',
+        '1688853366478196' => '李廷莎',
+        '1688855033441473' => '江禹朴',
+        '1688853366478174' => '臧令军'
+    ];
+
     public function __construct()
     {
         $this->juhebot = new JuhebotService();
@@ -87,8 +108,7 @@ class MessageCallbackService
         foreach ($applies as $apply) {
             try {
                 $this->handleApplyContact($apply);
-                $successCount++;
-                ApplyContactList::markAsAgreed($apply['id']);
+                $successCount++;                
             } catch (\Throwable $e) {
                 $failCount++;
                 LogService::error([
@@ -189,6 +209,7 @@ class MessageCallbackService
      */
     public function handleApplyContact(array $apply): void
     {
+        
         $roomName = $apply['room_name'] ?? '';
         $userId = $apply['user_id'] ?? '';
         $applyId = $apply['id'] ?? 0;
@@ -203,6 +224,7 @@ class MessageCallbackService
             ],
         ]);
 
+        // // 1、更新联系人标签
         $labelInfo = [
             'label_id'      => '14073753009969296',
             'corp_or_vid'   => '1970324956094061',
@@ -215,37 +237,53 @@ class MessageCallbackService
             return;
         }
 
-        $defaultUserList = [
-            '7881300953909122',
-            '1688857676604016',
-            '1688853366478174',
-            '1688858005772698',
-            '1688858160817011',
-            '1688853366655965',
-            '1688853366477841',
-            '1688853366477816',
-        ];
+        // 2、分配服务人员
+        $serviceUserId = $this->pickServiceUser($userId."");
+        $serviceUserName = self::SERVICE_USER_MAP[$serviceUserId] ?? '';
 
-        $roomResult = $this->juhebot->createOuterRoom(array_merge($defaultUserList, [$userId]));
+        // 3、创建外部群（含客服人员）
+        $userList = array_merge(self::DEFAULT_USER_LIST, [$userId, $serviceUserId]);// 去重
+        $userList = array_unique($userList);
+        $roomResult = $this->juhebot->createOuterRoom($userList);
+        
+        // 标记为已入群
+        ApplyContactList::markAsInRoom($applyId, ApplyContactList::STATUS_AGREED);
         $roomId = $roomResult['data']['roomid'] ?? 0;
-
+        // 4、发送欢迎语
+        $content =  "您好，欢迎咨询一键零申报！\n\n✨ 让报税，像点外卖一样简单！\n我们专注为全国小微企业、个体工商户，提供智能、合规、极简的一站式财税服务。\n\n 💰 服务价格 · 清晰透明\n\n小规模纳税人 / 个体工商户：\n1️⃣ 自助零申报：0 元/年 \n2️⃣ 托管零申报/非零申报：360 元/年\n\n一般纳税人：\n1️⃣ 零申报 ：360 元/年\n2️⃣ 非零申报 ：998 元/年\n\n一键开票：199 元/年（电子发票）\n\n⚠️注：自助申报不含工商税务年报，请记得按期登录税局系统申报，或购买托管申报服务。";
         $this->juhebot->sendText(
             'R:' . $roomId,
-            ($apply['name'] ?? '') . ' 欢迎加入群聊，我们将为您提供专业的一对一服务。'
+            $content
         );
 
+        // 5、获取群名称
         sleep(rand(1, 5));
-
         $roomName = $this->getRoomName($apply) ?: ($apply['name'] ?? '');
+        $finalRoomName = "一键零申报&{$roomName}";
+        if ($serviceUserName !== '') {
+            $serviceUserName = $serviceUserName."-".date('Y年m月d日');
+            $finalRoomName .= "（{$serviceUserName}）";
+        }
 
-        $this->juhebot->modifyRoomName($roomId, "一键零申报&{$roomName}");
+        // 6、修改群名称
+        $this->juhebot->modifyRoomName($roomId, $finalRoomName);
+        
+        // 7、标记为已同意   
+        ApplyContactList::markAsAgreed($applyId);
 
+        // 8、创建联系人房间关系 
         ContactRoom::create([
             'room_id' => $roomId,
             'user_id' => $userId,
+            'service_id' => $serviceUserId,
+            'room_name' => $finalRoomName,
+            'numbers'=>count($userList),
+            'service_name' => $serviceUserName,
+            'user_name' => $apply['name'],
+            'flag'=>"新用户咨询群"
         ]);
 
-        ApplyContactList::markAsInRoom($applyId, ApplyContactList::STATUS_AGREED);
+        
 
         LogService::info([
             'tag'     => 'MessageCallback',
@@ -291,5 +329,15 @@ class MessageCallbackService
             }
         }
         return '';
+    }
+
+    /**
+     * 根据 user_id 哈希值轮询分配服务人员
+     */
+    private function pickServiceUser(string $userId): string
+    {
+        $keys = array_keys(self::SERVICE_USER_MAP);
+        $idx = abs(crc32($userId)) % count($keys);
+        return (string)$keys[$idx] ?? '';
     }
 }

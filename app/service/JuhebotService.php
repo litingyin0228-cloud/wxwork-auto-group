@@ -933,4 +933,39 @@ class JuhebotService
         }
         return $raw;
     }
+
+    /**
+     * 同步获取标签列表
+     *
+     * @param string $seq  分页标识，默认为空
+     * @param int    $syncType  1=企业标签 2=个人标签（默认）
+     * @return array
+     */
+    public function syncLabelList(string $seq = '', int $syncType = 2): array
+    {
+        $data = [
+            'guid'     => $this->guid,
+            'seq'      => $seq,
+            'sync_type' => $syncType,
+        ];
+
+        $res = $this->post('/label/sync_label_list', $data);
+
+        if (($res['error_code'] ?? -1) !== 0) {
+            LogService::error([
+                'tag'     => 'Juhebot',
+                'message' => '同步标签列表失败',
+                'data'    => $res,
+            ]);
+            throw new \RuntimeException('同步标签列表失败: ' . ($res['message'] ?? ''));
+        }
+
+        LogService::info([
+            'tag'     => 'Juhebot',
+            'message' => '标签列表同步成功',
+            'data'    => $res,
+        ]);
+
+        return $res;
+    }
 }

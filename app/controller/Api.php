@@ -4,6 +4,7 @@ namespace app\controller;
 use app\BaseController;
 use app\model\ApplyContactList;
 use app\model\GroupChatLog;
+use app\model\LabelList;
 use app\service\JuhebotService;
 use app\service\LogService;
 use app\service\MessageCallbackService;
@@ -19,42 +20,108 @@ use think\Request;
 class Api extends BaseController
 {
     public function testJuheApi(Request $request){
-        // $this->getJuhebot()->sendWeApp("R:10893760625613145", ,"一键零申报","","欢迎使用一键零申报","/pages/index/index","https://shenbao.guiyangyuanqu.cn/uploads/images/logo.jpg",0,"");
-        // $content = $request->get('content');
-        // ini_set('memory_limit', '1024M');
-        // Jieba::init();
-        // Finalseg::init();
-        // $res = Jieba::cut($content);
-        echo base64_decode("aHR0cHM6Ly93ZXdvcmsucXBpYy5jbi93d3BpYzNhei84ODQ1MjJfeXNnbmtoRUhTUk9Zek9uXzE3NzUwODY2ODAvMA==");
+        // 获取一条待处理的申请记录
+        $applies = ApplyContactList::getPendingList(1);
+        if (empty($applies)) {
+            return $this->success([], '没有待处理的申请记录');
+        }
 
-        $service = new WxWorkService();
-        $res = $service->addContactWay("");
-        return $this->success(["res"=>$res],'添加联系人方式成功');
+        $apply = $applies[0];
+        $service = new MessageCallbackService();
+        $service->handleApplyContact($apply);
 
-        // $seq = Cache::set("last_contact_seq", "17999357");
+        return $this->success([
+            'apply_id' => $apply['id'],
+            'user_id'  => $apply['user_id'] ?? '',
+        ], '好友申请处理完成');
+    }
 
-        $orgName = Db::table("tax_org")->where("tax_id", 171)->value("name");
-        // dd($orgName);
+    /**
+     * 同步标签列表
+     *
+     * GET /api/syncLabel?sync_type=2&seq=&limit=100&max=0
+     */
+    public function syncLabel(Request $request)
+    {
+        $syncType = (int)$request->get('sync_type', 2);
+        if (!in_array($syncType, [1, 2], true)) {
+            return $this->error('sync_type 必须是 1（企业标签）或 2（个人标签）');
+        }
 
-        // $applies = ApplyContactList::getPendingList(10);
+        $seq   = (string)$request->get('seq', '');
+        $limit = (int)$request->get('limit', 100);
+        $max   = (int)$request->get('max', 0);
 
-        return $this->success(["res"=>$orgName],'处理好友申请成功');
-        // Event::trigger('RoomCreated', [
-        //     'guid'        => "0e950e07-0b01-3019-8269-31cee91ee6bf",
-        //     'notify_type' => 2131,
-        //     'data'        => [],
-        // ]);
-        // return $this->success(["seq"=>Cache::get("last_contact_seq")],'获取申请联系人序号成功');
-        // $service = new MessageCallbackService();
-        // $res = $service->processApplyContacts(env('JUHEBOT.GUID', ''), 10);
-        // return $this->success(["res"=>$res],'处理好友申请成功');
+        if ($limit <= 0) {
+            $limit = 100;
+        }
 
-        // echo GroupChatLog::where("customer_name", "干干")->where("mobile", "!=", "")->limit(1)->value("mobile");
+        $juhebot = new JuhebotService();
+        $totalInserted = 0;
+        $totalUpdated  = 0;
+        $totalHandled  = 0;
+        $lastSeq       = '';
 
-        // echo Db::table("tax_members")->where("phone", "13765089454")->value("org_id");
-        
-        // return $this->success(["content"=>$content, "list"=>$res],'分词成功');
-        // $res = $this->syncApplyContact();
-        // return $this->success(["insertCount"=>$res],'同步申请人列表成功');
+        while (true) {
+            if ($max > 0 && $totalHandled >= $max) {
+                break;
+            }
+
+            $res = $juhebot->syncLabelList($seq, $syncType);
+
+            if (empty($res) || empty($res['data'])) {
+                break;
+            }
+
+            $labelList = $res['data']['label_list'] ?? [];
+            $lastSeq   = (string)($res['data']['last_seq'] ?? '');
+
+            if (empty($labelList)) {
+                break;
+            }
+
+            $totalHandled += count($labelList);
+
+            foreach ($labelList as $item) {
+                $id = (string)($item['id'] ?? $item['label_id'] ?? '');
+                if ($id === '') {
+                    continue;
+                }
+
+                if (LabelList::existsById($id)) {
+                    try {
+                        LabelList::updateById($id, LabelList::diffLabelUpdate($item));
+                        $totalUpdated++;
+                    } catch (\Throwable $e) {
+                        LogService::warning([
+                            'tag'     => 'ApiSyncLabel',
+                            'message' => '更新标签失败，已忽略',
+                            'data'    => ['id' => $id, 'error' => $e->getMessage()],
+                        ]);
+                    }
+                } else {
+                    try {
+                        LabelList::insert(LabelList::mapLabelToRow($item, $syncType));
+                        $totalInserted++;
+                    } catch (\Throwable $e) {
+                        LogService::warning([
+                            'tag'     => 'ApiSyncLabel',
+                            'message' => '写入标签失败，已忽略',
+                            'data'    => ['id' => $id, 'error' => $e->getMessage()],
+                        ]);
+                    }
+                }
+            }
+
+            $seq = $lastSeq;
+        }
+
+        return $this->success([
+            'sync_type'      => $syncType,
+            'total_handled'  => $totalHandled,
+            'total_inserted' => $totalInserted,
+            'total_updated'   => $totalUpdated,
+            'last_seq'        => $lastSeq,
+        ], '标签同步完成');
     }
 }
