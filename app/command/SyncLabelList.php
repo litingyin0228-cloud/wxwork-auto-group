@@ -106,8 +106,8 @@ class SyncLabelList extends Command
                 break;
             }
 
-            $labelList = $res['data']['label_list'] ?? [];
-            $lastSeq = (string)($res['data']['last_seq'] ?? '');
+            $labelList = $res['data']['label_items'] ?? [];
+            $lastSeq = (string)($res['data']['seq'] ?? '');
 
             if (empty($labelList)) {
                 $output->writeln('<info>本批无数据，停止同步（last_seq: ' . $lastSeq . '）</info>');
@@ -157,7 +157,8 @@ class SyncLabelList extends Command
         $inserted = 0;
         $updated  = 0;
 
-        foreach ($labelList as $item) {
+        foreach ($labelList as $_item) {
+            $item = $_item['label'];
             $id = (string)($item['id'] ?? $item['label_id'] ?? '');
 
             if ($id === '') {

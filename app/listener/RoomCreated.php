@@ -116,11 +116,6 @@ class RoomCreated
                     $this->handleNormalMessage($data);
                     break;
                 default:
-                    LogService::warning([
-                        'tag'     => 'RoomCreated',
-                        'message' => '未处理的通知类型，丢弃该消息',
-                        'data'    => ['notify_type' => $notifyType],
-                    ]);
                     break;
             }
         } catch (\Throwable $e) {
@@ -279,10 +274,11 @@ class RoomCreated
         }
         if ($is_trigger) {
             // 根据热词库中的内容进行回复
+            $conversationId = 'R:'.$roomId;
             // $this->getJuhebot()->sendText("R:".$roomId, "#你好我是群智能助手，欢迎使用一键零申报，您的请求已收到，请稍后查看结果。");
-            $this->getJuhebot()->sendWeApp("R:".$roomId);
+            $this->getJuhebot()->sendWeApp($conversationId);
         } else {
-            $this->getJuhebot()->sendText("R:".$roomId, "#你好我是群智能助手，欢迎使用一键零申报，这个技能我还没有学会。");
+            // $this->getJuhebot()->sendText("R:".$roomId, "#你好我是群智能助手，欢迎使用一键零申报，这个技能我还没有学会。");
         }
     }
 }

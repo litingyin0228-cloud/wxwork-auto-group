@@ -48,3 +48,6 @@ Route::post('wxworkMsgCallback', 'Index/wxworkMsgCallback');
 Route::post('rpc',       'RpcController/index');
 Route::get('rpc/methods','RpcController/methods');
 Route::get('rpc/health', 'RpcController/health');
+
+// ─── 发送消息路由 ─────────────────────────────────────────────
+Route::post('send_message', 'Index/sendMessage');

@@ -3,3 +3,9 @@
 /vendor
 *.log
 .env
+.codebuddy
+.cursor
+.vscode
+.git
+/app/views
+/design-system

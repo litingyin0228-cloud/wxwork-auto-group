@@ -555,13 +555,6 @@ class JuhebotService
             ]);
             throw new \RuntimeException('发送文本消息失败: ' . ($res['message'] ?? ''));
         }
-
-        LogService::info([
-            'tag'     => 'Juhebot',
-            'message' => '文本消息发送成功',
-            'data'    => $res,
-        ]);
-
         return $res;
     }
 
@@ -590,13 +583,38 @@ class JuhebotService
             ]);
             throw new \RuntimeException('修改群名称失败: ' . ($res['message'] ?? ''));
         }
+        // 开启禁止互相添加为联系人、禁止修改群名
+        $this->modifyRoomAdminFlag($roomId, true, true);
+        return $res;
+    }
 
-        LogService::info([
-            'tag'     => 'Juhebot',
-            'message' => '群名称修改成功',
-            'data'    => $res,
-        ]);
+    /**
+     * 开启/关闭禁止互相添加为联系人、禁止修改群名
+     *
+     * @param string $roomId 群ID
+     * @param bool $forbidAddContact 是否禁止互相添加为联系人
+     * @param bool $forbidModName 是否禁止修改群名
+     * @return array
+     */
+    public function modifyRoomAdminFlag(string $roomId = '', bool $forbidAddContact = false, bool $forbidModName = false): array
+    {
+        $data = [
+            'guid'              => $this->guid,
+            'room_id'           => $roomId,
+            'forbid_add_contact' => $forbidAddContact,
+            'forbid_mod_name'   => $forbidModName,
+        ];
 
+        $res = $this->post('/room/modify_room_admin_flag', $data);
+
+        if (($res['error_code'] ?? -1) !== 0) {
+            LogService::error([
+                'tag'     => 'Juhebot',
+                'message' => '设置群管理标志失败',
+                'data'    => $res,
+            ]);
+            throw new \RuntimeException('设置群管理标志失败: ' . ($res['message'] ?? ''));
+        }
         return $res;
     }
 
@@ -617,15 +635,15 @@ class JuhebotService
      */
     public function sendWeApp(
         string $conversationId = '',
-        string $username = '',
+        string $username = '一键零申报',
         string $appname = '一键零申报',
         string $appicon = 'http://wx.qlogo.cn/mmhead/7SPO0mRJt6BfLTkRTASKrUvNmibO4IBHgBibhuZuKhD6kXL9iav0FLJwzlRpLzR6vdeEDONKdIVVjw/96',
         string $title = '一键零申报-不止零申报',
         string $pagePath = 'pages/index/index.html',
-        string $fileId = '30690201020462306002010002049bd817f802030f4df90204a5e63cb7020469cbd704042436663161363635392d383637312d346330652d383132392d323131393064653363333739020100020301aaf00410694c4373201bd967954dbef2f952e0700201010201000400',
+        string $fileId = '306b0201020464306202010002049c67101202031e903802042ac6f46d020469dfb8900435323632343030303031385f3138343432323037395f326630623937323132333339363533336363616263313934366634326237666502031038000202785004000201010201000400',
         int $size = 109283,
-        string $aesKey = '6ff7ad89efc34298a383f76e52347ab6',
-        string $md5 = '694c4373201bd967954dbef2f952e070'
+        string $aesKey = '7779726170737879756F72786E676D63',
+        string $md5 = '2f0b972123396533ccabc1946f42b7fe'
     ): array {
         $data = [
             'guid'            => $this->guid,
@@ -652,13 +670,6 @@ class JuhebotService
             ]);
             throw new \RuntimeException('发送小程序失败: ' . ($res['message'] ?? ''));
         }
-
-        LogService::info([
-            'tag'     => 'Juhebot',
-            'message' => '小程序发送成功',
-            'data'    => $res,
-        ]);
-
         return $res;
     }
 
@@ -880,6 +891,111 @@ class JuhebotService
         return $res;
     }
 
+    /**
+     * 为成员批量添加多个标签
+     *
+     * @param string $userId  成员用户ID
+     * @param array  $labelInfos 标签信息列表，每项包含 label_id, corp_or_vid, label_groupid, business_type
+     * @return array
+     * @throws \RuntimeException 接口调用失败时抛出
+     */
+    public function contactAddLabels(string $userId, array $labelInfos): array
+    {
+        $body = [
+            'guid'       => $this->guid,
+            'user_id'    => $userId,
+            'label_infos' => $labelInfos,
+        ];
+
+        LogService::info([
+            'tag'     => 'Juhebot',
+            'message' => '批量添加标签参数',
+            'data'    => $body,
+        ]);
+
+        $res = $this->post('/label/contact_add_labels', $body);
+
+        LogService::info([
+            'tag'     => 'Juhebot',
+            'message' => '批量添加标签返回结果',
+            'data'    => $res,
+        ]);
+
+        if (($res['error_code'] ?? -1) !== 0) {
+            LogService::error([
+                'tag'     => 'Juhebot',
+                'message' => '批量添加标签失败',
+                'data'    => $res,
+            ]);
+            throw new \RuntimeException('批量添加标签失败: ' . ($res['message'] ?? ''));
+        }
+
+        LogService::info([
+            'tag'     => 'Juhebot',
+            'message' => '批量添加标签成功',
+            'data'    => $res,
+        ]);
+
+        return $res;
+    }
+
+    /**
+     * 批量为成员添加标签（一次为多个成员添加同一个标签）
+     *
+     * @param array  $userList    成员用户ID列表
+     * @param string $labelId     标签ID
+     * @param string $corpOrVid   企业ID
+     * @param string $labelGroupid 标签组ID
+     * @param int    $businessType 业务类型
+     * @return array
+     * @throws \RuntimeException 接口调用失败时抛出
+     */
+    public function contactAddLabel(
+        array $userList,
+        string $labelId,
+        string $corpOrVid = '',
+        string $labelGroupid = '',
+        int $businessType = 0
+    ): array {
+        $body = [
+            'guid'          => $this->guid,
+            'user_list'     => $userList,
+            'label_id'      => $labelId,
+            'corp_or_vid'   => $corpOrVid,
+            'label_groupid' => $labelGroupid,
+            'business_type' => $businessType,
+        ];
+        LogService::info([
+            'tag'     => 'Juhebot',
+            'message' => '批量为成员添加标签参数',
+            'data'    => $body,
+        ]);
+
+        $res = $this->post('/label/contact_add_label', $body);    
+        LogService::info([
+            'tag'     => 'Juhebot',
+            'message' => '批量为成员添加标签返回结果',
+            'data'    => $res,
+        ]);
+
+        if (($res['error_code'] ?? -1) !== 0) {
+            LogService::error([
+                'tag'     => 'Juhebot',
+                'message' => '批量为成员添加标签失败',
+                'data'    => $res,
+            ]);
+            throw new \RuntimeException('批量为成员添加标签失败: ' . ($res['message'] ?? ''));
+        }
+
+        LogService::info([
+            'tag'     => 'Juhebot',
+            'message' => '批量为成员添加标签成功',
+            'data'    => $res,
+        ]);
+
+        return $res;
+    }
+
     // ─────────────────────────────────────────────
     // HTTP 工具方法
     // ─────────────────────────────────────────────
@@ -950,7 +1066,7 @@ class JuhebotService
         ];
 
         $res = $this->post('/label/sync_label_list', $data);
-
+        var_dump($res);
         if (($res['error_code'] ?? -1) !== 0) {
             LogService::error([
                 'tag'     => 'Juhebot',

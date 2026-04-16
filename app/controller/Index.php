@@ -53,12 +53,6 @@ class Index extends BaseController
                 ]);
             }
 
-            LogService::info([
-                'tag'     => 'JuhebotCallback',
-                'message' => '接收到消息回调',
-                'data'    => $params,
-            ]);
-
             $guid = $params['guid'] ?? '';
             $notifyType = $params['notify_type'] ?? 0;
             $data = $params['data'] ?? [];
@@ -130,16 +124,6 @@ class Index extends BaseController
             ]);
 
             if ($result) {
-                LogService::info([
-                    'tag'     => 'JuhebotCallback',
-                    'message' => '消息保存成功',
-                    'data'    => [
-                        'message_id' => $messageId,
-                        'sender'     => $sender,
-                        'content'    => $content,
-                    ],
-                ]);                
-
                 return json([
                     'code'    => 0,
                     'message' => '消息处理成功',
@@ -220,5 +204,217 @@ class Index extends BaseController
             ]);
             return $this->error($e->getMessage() );
         }
+    }
+
+    /**
+     * 修改用户标签
+     *
+     * @param Request $request
+     * type      - 标签类型（1=企业标签 2=个人标签）→ business_type
+     * org_id    - 企业ID → corp_or_vid
+     * phone     - 用户手机号（通过 ApplyContactList 查询 user_id）
+     * label_id  - 标签ID（可选，默认为企业标签ID）
+     * label_groupid - 标签组ID（可选）
+     */
+    public function updateContactLabel(Request $request)
+    {
+        $type  = (int)$request->param('type', 0);
+        $orgId = trim($request->param('org_id', ''));
+        $phone = trim($request->param('phone', ''));
+        $labelId    = trim($request->param('label_id', ''));
+        $labelGroupid = trim($request->param('label_groupid', ''));
+
+        if ($type === 0) {
+            return $this->error('type（标签类型）不能为空');
+        }
+        if (!in_array($type, [1, 2], true)) {
+            return $this->error('type 必须是 1（企业标签）或 2（个人标签）');
+        }
+        if ($orgId === '') {
+            return $this->error('org_id（企业ID）不能为空');
+        }
+        if ($phone === '') {
+            return $this->error('phone（手机号）不能为空');
+        }
+        if (!preg_match('/^1[3-9]\d{9}$/', $phone)) {
+            return $this->error('手机号格式不正确');
+        }
+
+        // 通过手机号查找 user_id
+        $userId = ApplyContactList::where('mobile', $phone)->value('user_id');
+        if ($userId === null || $userId === '') {
+            return $this->error('未找到该手机号对应的用户');
+        }
+
+        $labelInfo = [
+            'label_id'      => $labelId !== '' ? $labelId : '14073753009969296',
+            'corp_or_vid'   => $orgId,
+            'label_groupid' => $labelGroupid !== '' ? $labelGroupid : '14073749395893864',
+            'business_type' => $type,
+        ];
+
+        try {
+            $juhebot = new JuhebotService();
+            $res = $juhebot->updateContact($userId, '', '', '', '', [], $labelInfo);
+
+            LogService::info([
+                'tag'     => 'UpdateLabel',
+                'message' => '修改用户标签成功',
+                'data'    => [
+                    'user_id'   => $userId,
+                    'phone'     => $phone,
+                    'label_info' => $labelInfo,
+                    'result'    => $res,
+                ],
+            ]);
+
+            return $this->success($res, '标签修改成功');
+        } catch (\Throwable $e) {
+            LogService::error([
+                'tag'     => 'UpdateLabel',
+                'message' => '修改用户标签失败',
+                'data'    => [
+                    'user_id'  => $userId,
+                    'phone'    => $phone,
+                    'label_id' => $labelId,
+                    'error'    => $e->getMessage(),
+                ],
+            ]);
+            return $this->error('标签修改失败: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * 发送消息
+     * send_type: 1=文本，2=小程序
+     * msg_type: 1=文字，2=图片，3=链接（仅send_type=1有效）
+     * scope: 1=群+个人，2=群，3=个人
+     */
+    public function sendMessage(Request $request)
+    {
+        try {
+            $sendType = (int) $request->param('send_type', 0);
+            $msgType  = (int) $request->param('msg_type', 1);
+            $content  = $request->param('content', '');
+            $scope    = (int) $request->param('scope', 1);
+            $mobile = $request->param('mobile', '');
+            $path = $request->param('path', '');// 小程序路径
+
+            if(empty($mobile)){
+                return $this->error('手机号不能为空');
+            }
+            if (!in_array($sendType, [1, 2])) {
+                return $this->error('发送方式仅支持1(文本)或2(小程序)');
+            }
+            if ($sendType == 1 && empty($content)) {
+                return $this->error('消息内容不能为空');
+            }
+            // return ;
+
+            $service = new JuhebotService();
+
+            $scopeInfo = $this->getScopeUsers($scope, ['user_id', 'room_id'], $mobile);
+            
+            if (empty($scopeInfo)) {
+                return $this->error('未找到符合条件的用户');
+            }
+            $success = 0;
+            $fail = 0;
+            if ($scope === 3) {
+                $conversationUserId = 'S:' . ($scopeInfo['user_id'] ?? '');
+            }
+            if ($scope === 2) {
+                $conversationRoomId = 'R:' . ($scopeInfo['room_id'] ?? '');
+            }
+            
+            // 小程序发送方式
+            if ($sendType === 2) {
+                try {
+                    switch ($scope) {
+                        case 1:
+                            $service->sendWeApp($conversationUserId, 
+                            '', 
+                            '一键零申报', 
+                            'http://wx.qlogo.cn/mmhead/7SPO0mRJt6BfLTkRTASKrUvNmibO4IBHgBibhuZuKhD6kXL9iav0FLJwzlRpLzR6vdeEDONKdIVVjw/96', 
+                            '一键零申报-不止零申报', 
+                            $path);
+                            $service->sendWeApp($conversationRoomId, 
+                            '', 
+                            '一键零申报', 
+                            'http://wx.qlogo.cn/mmhead/7SPO0mRJt6BfLTkRTASKrUvNmibO4IBHgBibhuZuKhD6kXL9iav0FLJwzlRpLzR6vdeEDONKdIVVjw/96', 
+                            '一键零申报-不止零申报', 
+                            $path);
+                            break;
+                        case 2:
+                            $service->sendWeApp($conversationRoomId, 
+                            '', 
+                            '一键零申报', 
+                            'http://wx.qlogo.cn/mmhead/7SPO0mRJt6BfLTkRTASKrUvNmibO4IBHgBibhuZuKhD6kXL9iav0FLJwzlRpLzR6vdeEDONKdIVVjw/96', 
+                            '一键零申报-不止零申报', 
+                            $path);
+                            break;
+                        case 3:
+                            $service->sendWeApp($conversationUserId, 
+                            '', 
+                            '一键零申报', 
+                            'http://wx.qlogo.cn/mmhead/7SPO0mRJt6BfLTkRTASKrUvNmibO4IBHgBibhuZuKhD6kXL9iav0FLJwzlRpLzR6vdeEDONKdIVVjw/96', 
+                            '一键零申报-不止零申报', 
+                            $path);
+                            break;
+                    }                                     
+                    $success++;
+                } catch (\Throwable $e) {
+                    $fail++;
+                }
+                return $this->success(['success' => $success, 'fail' => $fail], '小程序发送完成');
+            } else {
+                // 文本发送方式 - 目前仅支持文字消息
+                try {                    
+                    switch ($scope) {
+                        case 1:
+                            $service->sendText($conversationUserId, $content);
+                            $service->sendText($conversationRoomId, $content);
+                            break;
+                        case 2:
+                            $service->sendText($conversationRoomId, $content);
+                            break;
+                        case 3:
+                            $service->sendText($conversationUserId, $content);
+                            break;
+                    }
+                    $success++;
+                } catch (\Throwable $e) {
+                    $fail++;
+                }
+                return $this->success(['success' => $success, 'fail' => $fail], '文本发送完成');
+            }
+            
+
+        } catch (\Throwable $e) {
+            LogService::error([
+                'tag'     => 'SendMessage',
+                'message' => '发送消息异常',
+                'data'    => [
+                    'error' => $e->getMessage(),
+                    'trace' => $e->getTraceAsString(),
+                ],
+            ]);
+            return $this->error('发送消息失败: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * 根据推送范围获取用户列表
+     */
+    private function getScopeUsers(int $scope, array $field = ['*'], string $mobile = ''): array
+    {
+        $user_id = Db::table('wxwork_apply_contact_list')->where('mobile', $mobile)->value('user_id');
+        if(empty($user_id)){
+            return [];
+        }
+        $result = Db::table('wxwork_contact_room')
+        ->where('status', '=', 1)
+        ->where('user_id', $user_id)->field($field)->find();
+        return $result;
     }
 }

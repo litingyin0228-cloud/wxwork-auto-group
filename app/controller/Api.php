@@ -20,20 +20,60 @@ use think\Request;
 class Api extends BaseController
 {
     public function testJuheApi(Request $request){
-        // 获取一条待处理的申请记录
-        $applies = ApplyContactList::getPendingList(1);
-        if (empty($applies)) {
-            return $this->success([], '没有待处理的申请记录');
+        $cacheKey      = 'processed_room_ids';
+        $totalKey      = 'processed_room_total';
+        $processedIds = Cache::get($cacheKey) ?? [];
+        $totalCount    = (int)Cache::get($totalKey, 0);
+
+        // 每次最多处理 30 个群
+        $limit     = rand(10, 20);
+        $dbRoomIds = Db::table("wxwork_contact_room")
+            ->whereRaw($processedIds ? "room_id NOT IN ('" . implode("','", $processedIds) . "')" : "1=1")
+            ->limit($limit)
+            ->column("room_id");
+
+        if (empty($dbRoomIds)) {
+            return $this->success([
+                'total_processed' => $totalCount,
+                'processed'       => 0,
+                'new_processed'   => 0,
+            ], '所有群已处理完成，无需重复操作');
         }
 
-        $apply = $applies[0];
-        $service = new MessageCallbackService();
-        $service->handleApplyContact($apply);
+        $juhebot      = new JuhebotService();
+        $newProcessed = 0;
+        $failedList   = [];
+
+        foreach ($dbRoomIds as $roomId) {
+            try {
+                $juhebot->modifyRoomAdminFlag($roomId, true, true);
+
+                // 每处理完成一个，立即写入缓存，防止重复操作
+                $processedIds[] = $roomId;
+                Cache::set($cacheKey, $processedIds, 0);
+                Cache::set($totalKey, ++$totalCount, 0);
+                $newProcessed++;
+
+                LogService::info([
+                    'tag'     => 'RoomAdminFlag',
+                    'message' => '群管理标志设置成功',
+                    'data'    => ['room_id' => $roomId, 'total' => $totalCount],
+                ]);
+            } catch (\Throwable $e) {
+                $failedList[] = $roomId;
+                LogService::warning([
+                    'tag'     => 'RoomAdminFlag',
+                    'message' => '群管理标志设置失败，已跳过',
+                    'data'    => ['room_id' => $roomId, 'error' => $e->getMessage()],
+                ]);
+            }
+        }
 
         return $this->success([
-            'apply_id' => $apply['id'],
-            'user_id'  => $apply['user_id'] ?? '',
-        ], '好友申请处理完成');
+            'total_processed' => $totalCount,
+            'new_processed'  => $newProcessed,
+            'failed'          => $failedList,
+        ], '群管理标志批量修改完成');
     }
 
     /**

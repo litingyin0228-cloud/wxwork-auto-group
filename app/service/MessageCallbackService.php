@@ -1,5 +1,4 @@
 <?php
-declare(strict_types=1);
 
 namespace app\service;
 
@@ -25,7 +24,9 @@ class MessageCallbackService
         '1688853366655965',
         '1688853366477816',
         '1688853366477841',
-        '1688853366478174'
+        '1688853366478174',
+        '7881300271944846',// 干干
+        '1688856769861624'// LITINGYIN 测试
     ];
 
     private const SERVICE_USER_MAP = [
@@ -108,8 +109,10 @@ class MessageCallbackService
         foreach ($applies as $apply) {
             try {
                 $this->handleApplyContact($apply);
-                $successCount++;                
+                ApplyContactList::markStatus($apply['id']); // 标记 status + in_room
+                $successCount++;
             } catch (\Throwable $e) {
+                ApplyContactList::markStatus($apply['id'], ApplyContactList::STATUS_FAILED, ApplyContactList::STATUS_FAILED);
                 $failCount++;
                 LogService::error([
                     'tag'     => 'MessageCallback',
@@ -214,16 +217,6 @@ class MessageCallbackService
         $userId = $apply['user_id'] ?? '';
         $applyId = $apply['id'] ?? 0;
 
-        LogService::info([
-            'tag'     => 'MessageCallback',
-            'message' => '开始处理好友申请',
-            'data'    => [
-                'apply_id'  => $applyId,
-                'room_name' => $roomName,
-                'user_id'   => $userId,
-            ],
-        ]);
-
         // // 1、更新联系人标签
         $labelInfo = [
             'label_id'      => '14073753009969296',
@@ -233,12 +226,19 @@ class MessageCallbackService
         ];
         $this->juhebot->updateContact($userId, '', '', '', '', [], $labelInfo);
 
-        if ($apply['in_room'] != 0) {
+        if ($apply['in_room'] != 0 || ContactRoom::where("user_id", $userId)->count() > 0) {
+            LogService::info([
+                'tag'     => 'MessageCallback',
+                'message' => '好友申请已处理',
+                'data'    => [
+                    'user_id'   => $userId,
+                ],
+            ]);
             return;
         }
 
         // 2、分配服务人员
-        $serviceUserId = $this->pickServiceUser($userId."");
+        $serviceUserId = $this->pickServiceUser($userId);
         $serviceUserName = self::SERVICE_USER_MAP[$serviceUserId] ?? '';
 
         // 3、创建外部群（含客服人员）
@@ -246,8 +246,7 @@ class MessageCallbackService
         $userList = array_unique($userList);
         $roomResult = $this->juhebot->createOuterRoom($userList);
         
-        // 标记为已入群
-        ApplyContactList::markAsInRoom($applyId, ApplyContactList::STATUS_AGREED);
+        
         $roomId = $roomResult['data']['roomid'] ?? 0;
         // 4、发送欢迎语
         $content =  "您好，欢迎咨询一键零申报！\n\n✨ 让报税，像点外卖一样简单！\n我们专注为全国小微企业、个体工商户，提供智能、合规、极简的一站式财税服务。\n\n 💰 服务价格 · 清晰透明\n\n小规模纳税人 / 个体工商户：\n1️⃣ 自助零申报：0 元/年 \n2️⃣ 托管零申报/非零申报：360 元/年\n\n一般纳税人：\n1️⃣ 零申报 ：360 元/年\n2️⃣ 非零申报 ：998 元/年\n\n一键开票：199 元/年（电子发票）\n\n⚠️注：自助申报不含工商税务年报，请记得按期登录税局系统申报，或购买托管申报服务。";
@@ -267,9 +266,6 @@ class MessageCallbackService
 
         // 6、修改群名称
         $this->juhebot->modifyRoomName($roomId, $finalRoomName);
-        
-        // 7、标记为已同意   
-        ApplyContactList::markAsAgreed($applyId);
 
         // 8、创建联系人房间关系 
         ContactRoom::create([
@@ -308,6 +304,10 @@ class MessageCallbackService
             $apply['bind_org_id'] = $bind_org_id;
         }
         $orgName = Db::table("tax_org")->where("tax_id", $apply['bind_org_id'])->value("name");
+        // $orgName 最多8个字，超过的用...代替
+        if (mb_strlen($orgName) > 8) {
+            $orgName = mb_substr($orgName, 0, 8) . '...';
+        }
         return $orgName ?: ($apply['name'] ?? '');
     }
 
@@ -332,12 +332,19 @@ class MessageCallbackService
     }
 
     /**
-     * 根据 user_id 哈希值轮询分配服务人员
+     * 根据当天日期轮询分配服务人员，同一天所有人分到同一个客服
      */
-    private function pickServiceUser(string $userId): string
+    private function pickServiceUser(): string
     {
         $keys = array_keys(self::SERVICE_USER_MAP);
-        $idx = abs(crc32($userId)) % count($keys);
-        return (string)$keys[$idx] ?? '';
+        $count = count($keys);
+        if ($count === 0) {
+            return '';
+        }
+
+        $dayOfYear = (int)date('z');
+        $idx = $dayOfYear % $count;
+
+        return (string)$keys[$idx];
     }
 }

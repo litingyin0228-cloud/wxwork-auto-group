@@ -25,7 +25,8 @@ class ApplyContactList extends Model
     const STATUS_PENDING = 0;  // 待处理
     const STATUS_AGREED = 1;   // 已同意
     const STATUS_REJECTED = 2;  // 已拒绝
-    const STATUS_DELETED = 3;   // 已删除（flag=3时）
+    const STATUS_FAILED = 3;    // 已失败
+    const STATUS_DELETED = 4;   // 已删除（flag=3时）
 
     /**
      * 状态文本映射
@@ -34,6 +35,7 @@ class ApplyContactList extends Model
         self::STATUS_PENDING  => '待处理',
         self::STATUS_AGREED  => '已同意',
         self::STATUS_REJECTED => '已拒绝',
+        self::STATUS_FAILED => '已失败',
         self::STATUS_DELETED => '已删除',
     ];
 
@@ -207,7 +209,7 @@ class ApplyContactList extends Model
      * @param int $status
      * @return bool
      */
-    public static function markAsInRoom(int $id, int $status): bool
+    public static function markAsInRoom(int $id, int $status = self::STATUS_AGREED): bool
     {
         return self::where('id', $id)->update([
             'in_room'     => $status,
@@ -220,9 +222,26 @@ class ApplyContactList extends Model
      * @param int $id
      * @return bool
      */
-    public static function markAsAgreed(int $id): bool
+    public static function markAsAgreed(int $id, int $status = self::STATUS_AGREED): bool
     {
-        return self::markAsProcessed($id, self::STATUS_AGREED);
+        return self::markAsProcessed($id, $status);
+    }
+
+    /**
+     * 同时标记 status 和 in_room 两个状态（一次 SQL 完成）
+     *
+     * @param int $id      记录ID
+     * @param int $status  status 值（默认已同意）
+     * @param int $inRoom  in_room 值（默认已入群）
+     * @return bool
+     */
+    public static function markStatus(int $id, int $status = self::STATUS_AGREED, int $inRoom = self::STATUS_AGREED): bool
+    {
+        return self::where('id', $id)->update([
+            'status'    => $status,
+            'in_room'   => $inRoom,
+            'update_at' => date('Y-m-d H:i:s'),
+        ]) > 0;
     }
 
     /**
