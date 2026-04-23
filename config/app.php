@@ -29,4 +29,7 @@ return [
     'error_message'    => '页面错误！请稍后再试～',
     // 显示错误信息
     'show_error_msg'   => false,
+
+    // API 鉴权 Token（生产环境请通过环境变量设置）
+    'api_token'        => env('app.api_token', ''),
 ];

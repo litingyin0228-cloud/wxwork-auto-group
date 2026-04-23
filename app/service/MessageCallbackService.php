@@ -25,6 +25,7 @@ class MessageCallbackService
         '1688853366477816',
         '1688853366477841',
         '1688853366478174',
+        '1688855039802161',
         '7881300271944846',// 干干
         '1688856769861624'// LITINGYIN 测试
     ];
@@ -217,15 +218,6 @@ class MessageCallbackService
         $userId = $apply['user_id'] ?? '';
         $applyId = $apply['id'] ?? 0;
 
-        // // 1、更新联系人标签
-        $labelInfo = [
-            'label_id'      => '14073753009969296',
-            'corp_or_vid'   => '1970324956094061',
-            'label_groupid' => '14073749395893864',
-            'business_type' => 0,
-        ];
-        $this->juhebot->updateContact($userId, '', '', '', '', [], $labelInfo);
-
         if ($apply['in_room'] != 0 || ContactRoom::where("user_id", $userId)->count() > 0) {
             LogService::info([
                 'tag'     => 'MessageCallback',
@@ -236,26 +228,25 @@ class MessageCallbackService
             ]);
             return;
         }
-
-        // 2、分配服务人员
+        // 1、分配服务人员
         $serviceUserId = $this->pickServiceUser($userId);
         $serviceUserName = self::SERVICE_USER_MAP[$serviceUserId] ?? '';
 
-        // 3、创建外部群（含客服人员）
+        // 2、创建外部群（含客服人员）
         $userList = array_merge(self::DEFAULT_USER_LIST, [$userId, $serviceUserId]);// 去重
         $userList = array_unique($userList);
         $roomResult = $this->juhebot->createOuterRoom($userList);
         
         
         $roomId = $roomResult['data']['roomid'] ?? 0;
-        // 4、发送欢迎语
+        // 3、发送欢迎语
         $content =  "您好，欢迎咨询一键零申报！\n\n✨ 让报税，像点外卖一样简单！\n我们专注为全国小微企业、个体工商户，提供智能、合规、极简的一站式财税服务。\n\n 💰 服务价格 · 清晰透明\n\n小规模纳税人 / 个体工商户：\n1️⃣ 自助零申报：0 元/年 \n2️⃣ 托管零申报/非零申报：360 元/年\n\n一般纳税人：\n1️⃣ 零申报 ：360 元/年\n2️⃣ 非零申报 ：998 元/年\n\n一键开票：199 元/年（电子发票）\n\n⚠️注：自助申报不含工商税务年报，请记得按期登录税局系统申报，或购买托管申报服务。";
         $this->juhebot->sendText(
             'R:' . $roomId,
             $content
         );
 
-        // 5、获取群名称
+        // 4、获取群名称
         sleep(rand(1, 5));
         $roomName = $this->getRoomName($apply) ?: ($apply['name'] ?? '');
         $finalRoomName = "一键零申报&{$roomName}";
@@ -263,9 +254,31 @@ class MessageCallbackService
             $serviceUserName = $serviceUserName."-".date('Y年m月d日');
             $finalRoomName .= "（{$serviceUserName}）";
         }
-
-        // 6、修改群名称
+        // 5、修改群名称
         $this->juhebot->modifyRoomName($roomId, $finalRoomName);
+
+        // 6、更新联系人标签
+        $labelInfo = [
+            'label_id'      => '14073753009969296',
+            'corp_or_vid'   => '1970324956094061',
+            'label_groupid' => '14073749395893864',
+            'business_type' => 0,
+        ];
+        $phontList = [];
+        $orgName_ = '';
+        $registerName_ = '';
+    
+        // 如果$apply['bind_org_id'] 存在就添加到$orgName_
+        if ($apply['bind_org_id'] && $apply['mobile']) {
+            $taxOrg = Db::table("tax_org")->where("tax_id", $apply['bind_org_id'])->find();
+            if ($taxOrg) {            
+                $orgName_ = $taxOrg['name'] ?? '';
+                $registerName_ = $taxOrg['register_name'] ?? '';
+                $phontList[] = $taxOrg['sjhm'] ?? $apply['mobile'] ?? '';
+            }
+        }
+        sleep(rand(1, 5)); // 延迟处理
+        $this->juhebot->updateContact($userId, $finalRoomName, $registerName_, '', $orgName_, $phontList, $labelInfo);
 
         // 8、创建联系人房间关系 
         ContactRoom::create([

@@ -5,6 +5,7 @@ namespace app\service;
 
 use app\service\LogService;
 use GuzzleHttp\Client;
+use think\facade\Cache;
 
 /**
  * Juhebot 接口服务
@@ -622,42 +623,48 @@ class JuhebotService
      * 发送小程序
      *
      * @param string $conversationId 会话ID（群ID以 R: 开头，联系人ID以 S: 开头）
+     * @param string $pagePath 小程序页面路径
      * @param string $username 原始ID
      * @param string $appname 小程序名称
      * @param string $appicon 小程序图标
      * @param string $title 小程序标题
-     * @param string $pagePath 小程序页面路径
      * @param string $fileId 文件ID
      * @param int $size 大小
      * @param string $aesKey AES密钥
      * @param string $md5 MD5值
+     * @param array $baseRequest CDN基础请求参数（从 getCdnInfo 获取）
+     * @param int $fileType 文件类型
      * @return array
      */
     public function sendWeApp(
         string $conversationId = '',
-        string $username = '一键零申报',
-        string $appname = '一键零申报',
-        string $appicon = 'http://wx.qlogo.cn/mmhead/7SPO0mRJt6BfLTkRTASKrUvNmibO4IBHgBibhuZuKhD6kXL9iav0FLJwzlRpLzR6vdeEDONKdIVVjw/96',
-        string $title = '一键零申报-不止零申报',
-        string $pagePath = 'pages/index/index.html',
-        string $fileId = '306b0201020464306202010002049c67101202031e903802042ac6f46d020469dfb8900435323632343030303031385f3138343432323037395f326630623937323132333339363533336363616263313934366634326237666502031038000202785004000201010201000400',
-        int $size = 109283,
-        string $aesKey = '7779726170737879756F72786E676D63',
-        string $md5 = '2f0b972123396533ccabc1946f42b7fe'
+        string $pagePath = '',
+        string $username = '',
+        string $appname = '',
+        string $appicon = '',
+        string $title = '',
+        string $fileId = '',
+        int $size = 0,
+        string $aesKey = '',
+        string $md5 = '',
+        array $baseRequest = [],
+        int $fileType = 2
     ): array {
         $data = [
             'guid'            => $this->guid,
             'conversation_id' => $conversationId,
-            'username'        => $username,
+            'username'        => $username ?: 'gh_7a00c007af50@app',
             'appid'           => $this->appid,
-            'appname'         => $appname,
-            'appicon'         => $appicon,
-            'title'           => $title,
-            'page_path'       => $pagePath,
-            'file_id'         => $fileId,
-            'size'            => $size,
-            'aes_key'         => $aesKey,
-            'md5'             => $md5,
+            'appname'         => $appname ?: '一键零申报',
+            'appicon'         => $appicon ?: 'http://mmbiz.qpic.cn/sz_mmbiz_png/quQhPKanm9UDmQKxTFMFpqlicYqf21zGcknrY4VN9iac4sBty4klux6eK892CdfpE6yibCKgeDz7wOT4qYkiaCzsiag/640?wx_fmt=png&wxfrom=200',
+            'title'           => $title ?: '一键零申报-不止零申报',
+            'page_path'       => $pagePath ?: 'pages/index/index.html',
+            'file_id'         => $fileId ?: '3069020102046230600201000204d0fc93f802030f4dfb02041421e878020469e4d1ec042435386639646266652d633533382d343035302d383531622d303734656336613064323336020100020300e5300410b5888ecc91a13cb2d9f9a7b4e803fe6e0201010201000400',
+            'size'            => $size ?: 58671,
+            'aes_key'         => $aesKey ?: '93fe6a9d9aad41599fb98eef3a5d923e',
+            'md5'             => $md5 ?: 'b5888ecc91a13cb2d9f9a7b4e803fe6e',
+            'base_request'    => $baseRequest,
+            'file_type'       => $fileType,
         ];
 
         $res = $this->post('/msg/send_weapp', $data);
@@ -672,6 +679,98 @@ class JuhebotService
         }
         return $res;
     }
+
+    //
+
+    /**
+     * 获取CDN信息
+     *
+     * 私有化CDN服务需要调用此接口，参数可以复用，建议每3小时更新一次
+     *
+     * @return array
+     */
+    public function getCdnInfo(): array
+    {
+        $cacheKey = 'juhebot_cdn_info_' . $this->guid;
+
+        if ($cached = Cache::get($cacheKey)) {
+            return $cached;
+        }
+
+        $data = [
+            'guid' => $this->guid,
+        ];
+
+        $res = $this->post('/cdn/get_cdn_info', $data);
+
+        if (($res['error_code'] ?? -1) === 0) {
+            Cache::set($cacheKey, $res['data'], 10800); // 3小时 = 10800秒
+        }
+
+        return $res['data'];
+    }
+
+    /**
+     * C2C文件上传
+     *
+     * @param array $baseRequest CDN基础请求参数（从 getCdnInfo 获取）
+     * @param string $url 可访问的外部文件地址
+     * @param int $fileType 文件类型（2=图片）
+     * @return array
+     */
+    public function c2cUploadForUrl(array $baseRequest, string $url, int $fileType = 2): array
+    {
+        $postData = [
+            'base_request' => $baseRequest,
+            'file_type'    => $fileType,
+            'url'          => $url,
+        ];
+
+        $ch = curl_init('https://oss.guiyangyuanqu.cn/cloud/c2c_upload');
+        curl_setopt_array($ch, [
+            CURLOPT_POST           => true,
+            CURLOPT_POSTFIELDS     => json_encode($postData),
+            CURLOPT_HTTPHEADER     => ['Content-Type: application/json'],
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT        => 30,
+        ]);
+
+        $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $error    = curl_error($ch);
+        curl_close($ch);
+
+        if ($error) {
+            LogService::error([
+                'tag'     => 'Juhebot',
+                'message' => 'c2cUpload 请求失败',
+                'error'   => $error,
+            ]);
+            throw new \RuntimeException('c2cUpload 请求失败: ' . $error);
+        }
+
+        if ($httpCode !== 200) {
+            LogService::error([
+                'tag'      => 'Juhebot',
+                'message'  => 'c2cUpload 响应异常',
+                'httpCode' => $httpCode,
+            ]);
+            throw new \RuntimeException('c2cUpload 响应异常: HTTP ' . $httpCode);
+        }
+
+        $res = json_decode($response, true);
+        if (($res['error_code'] ?? -1) !== 0) {
+            LogService::error([
+                'tag'     => 'Juhebot',
+                'message' => 'c2cUpload 业务失败',
+                'data'    => $res,
+            ]);
+            throw new \RuntimeException('c2cUpload 失败: ' . ($res['message'] ?? ''));
+        }
+
+        return $res;
+    }
+
 
     /**
      * 发送图片消息
@@ -689,23 +788,23 @@ class JuhebotService
     public function sendImage(
         string $conversationId = '',
         string $fileId = '',
+        string $aesKey = '',
+        string $md5 = '',
         int $size = 0,
         int $imageWidth = 0,
         int $imageHeight = 0,
-        string $aesKey = '',
-        string $md5 = '',
-        bool $isHd = false
+        bool $isHd = false        
     ): array {
         $data = [
             'guid'            => $this->guid,
             'conversation_id' => $conversationId,
-            'file_id'         => $fileId,
-            'size'            => $size,
-            'image_width'     => $imageWidth,
-            'image_height'    => $imageHeight,
             'aes_key'         => $aesKey,
             'md5'             => $md5,
             'is_hd'           => $isHd,
+            'file_id'         => $fileId,
+            'size'            => $size,
+            'image_width'     => $imageWidth,
+            'image_height'    => $imageHeight            
         ];
 
         $res = $this->post('/msg/send_image', $data);

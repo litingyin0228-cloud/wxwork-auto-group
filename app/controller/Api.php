@@ -12,6 +12,7 @@ use app\service\WxWorkService;
 use Fukuball\Jieba\Finalseg;
 use Fukuball\Jieba\Jieba;
 use think\App;
+use think\cache\driver\Redis;
 use think\facade\Cache;
 use think\facade\Db;
 use think\facade\Event;
@@ -19,6 +20,103 @@ use think\Request;
 
 class Api extends BaseController
 {
+    private const FILE_TYPE_IMAGE = 2;
+    private const FILE_TYPE_FILE  = 5;
+    public function testRedis(){
+        
+    }
+
+    public function testSendImg(Request $request)
+    {
+        $url           = $request->param('url', 'https://cjky-commom-bucket-2025.oss-cn-beijing.aliyuncs.com/images/ces/17364052744767269.png');
+        $conversationId = $request->param('conversation_id', 'R:10749471615177810');
+        $fileType      = (int) $request->param('file_type', self::FILE_TYPE_IMAGE);
+        $fileName      = $request->param('file_name', '');
+        $title         = $request->param('title', '发送文件成功');
+
+        $juhebot = new JuhebotService();
+
+        $cdnInfo = $juhebot->getCdnInfo();
+        $baseRequest = $cdnInfo['data'] ?? $cdnInfo;
+
+        $uploadRes = $juhebot->c2cUploadForUrl($baseRequest, $url, $fileType);
+        $data = $uploadRes['data'] ?? [];
+
+        $conversationId = $data['conversation_id'] ?? $conversationId;
+
+        if ($fileType !== self::FILE_TYPE_IMAGE && $fileType !== self::FILE_TYPE_FILE) {
+            return $this->error('不支持的文件类型: ' . $fileType);
+        }
+
+        if ($fileType === self::FILE_TYPE_IMAGE) {
+            $res = $juhebot->sendImage(
+                $conversationId,
+                $data['file_id'] ?? '',
+                $data['aes_key'] ?? '',
+                $data['file_md5'] ?? '',
+                $data['file_size'] ?? 0,
+                $data['image_width'] ?? 0,
+                $data['image_height'] ?? 0,
+                false
+            );
+        } elseif ($fileType === self::FILE_TYPE_FILE) {
+            $res = $juhebot->sendFile(
+                $conversationId,
+                $data['file_id'] ?? '',
+                $data['file_size'] ?? 0,
+                $fileName ?: '文件.pdf',
+                $data['aes_key'] ?? '',
+                $data['file_md5'] ?? ''
+            );
+        }
+
+        return $this->success(['res' => $res], $title);
+    }
+    public function tokenTest(){
+        return $this->success([
+            'token' => env("app.api_token"),
+        ], 'token测试成功');
+    }
+    public function index(){
+        // 6、更新联系人标签
+        $labelInfo = [
+            'label_id'      => '14073753009969296',
+            'corp_or_vid'   => '1970324956094061',
+            'label_groupid' => '14073749395893864',
+            'business_type' => 0,
+        ];
+        $phontList = [];
+        $orgName_ = '';
+        $registerName_ = '';
+
+        $userId = '7881300544963733';
+        $apply = [
+            'bind_org_id' => 383,
+            'mobile' => "18198643913",
+        ];
+    
+        // 如果$apply['bind_org_id'] 存在就添加到$orgName_
+        if ($apply['bind_org_id'] && $apply['mobile']) {
+            $taxOrg = Db::table("tax_org")->where("tax_id", $apply['bind_org_id'])->find();
+            if ($taxOrg) {
+                $orgName_ = $taxOrg['name'] ?? '';
+                $registerName_ = $taxOrg['register_name'] ?? '';
+                $phontList[] = $taxOrg['sjhm'] ?? $apply['mobile'] ?? '';
+            }
+        }
+        $juhebot      = new JuhebotService();
+        $res = $juhebot->updateContact($userId, $orgName_." - ".$registerName_, $registerName_, '', $orgName_, $phontList, $labelInfo);
+        return $this->success([
+            'message' => $res,
+        ], '修改成功');
+    }
+
+    public function getLastSeq(){
+        $lastSeq = ApplyContactList::order('id', 'desc')->limit(1)->value('seq');
+        return $this->success([
+            'last_seq' => $lastSeq,
+        ], '获取最后SEQ成功');
+    }
     public function testJuheApi(Request $request){
         $cacheKey      = 'processed_room_ids';
         $totalKey      = 'processed_room_total';

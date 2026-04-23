@@ -137,16 +137,13 @@ class RoomCreated
      */
     protected function syncContact()
     {
-        $seq = Cache::get('last_contact_seq','17999263');// 默认SEQ
+        $seq = ApplyContactList::order('id', 'desc')->limit(1)->value('seq');
         // 同步联系人
         $contactList = $this->getJuhebot()->syncContact($seq);
-        Cache::set('last_contact_seq', $contactList['data']['last_seq']); // 缓存SEQ
-        
 
         if (empty($contactList['data']['contact_list'])) {
             return 0;
         }
-        Cache::set('last_apply_seq', $contactList['data']['last_seq']); // 缓存SEQ
         $insertCount = 0;
         foreach ($contactList['data']['contact_list'] as $contact) {
             if (ApplyContactList::where("user_id",$contact['user_id'])->limit(1)->find()) {
@@ -241,13 +238,16 @@ class RoomCreated
         $senderName = $data['sender_name'] ?? ''; // 发送用户名称
         $content = $data['content'] ?? ''; // 消息内容
         $roomId = $data['roomid'] ?? ''; // 群ID
+        $goInvoice = false;
 
         // $hotWords = HotWordList::where("status",1)->select();        
         ini_set('memory_limit', '1024M');
         Jieba::init();
         Finalseg::init();
-        
-        $content = preg_replace('/@[^\s]+/s', '', $content);
+        // 截取 @一键零申报 哈哈发撒龙卷风  如何去掉@一键零申报
+        $content = preg_replace('/@一键零申报/s', '', $content);
+        // $this->getJuhebot()->sendText("R:".$roomId, $content);
+        // $content = preg_replace('/@[^\s]+/s', '', $content);
         LogService::info([
             'tag'     => 'RoomCreated',
             'message' => '截取掉用户名称后的内容',
@@ -255,7 +255,6 @@ class RoomCreated
         ]);
 
         $words = Jieba::cut($content); // 分词
-
         LogService::info([
             'tag'     => 'RoomCreated',
             'message' => '分词结果',
@@ -277,6 +276,7 @@ class RoomCreated
             $conversationId = 'R:'.$roomId;
             // $this->getJuhebot()->sendText("R:".$roomId, "#你好我是群智能助手，欢迎使用一键零申报，您的请求已收到，请稍后查看结果。");
             $this->getJuhebot()->sendWeApp($conversationId);
+            // 
         } else {
             // $this->getJuhebot()->sendText("R:".$roomId, "#你好我是群智能助手，欢迎使用一键零申报，这个技能我还没有学会。");
         }
