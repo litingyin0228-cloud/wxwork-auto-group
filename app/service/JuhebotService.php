@@ -715,7 +715,7 @@ class JuhebotService
      *
      * @param array $baseRequest CDN基础请求参数（从 getCdnInfo 获取）
      * @param string $url 可访问的外部文件地址
-     * @param int $fileType 文件类型（2=图片）
+     * @param int $fileType 文件类型（2=图片,5=文件）
      * @return array
      */
     public function c2cUploadForUrl(array $baseRequest, string $url, int $fileType = 2): array

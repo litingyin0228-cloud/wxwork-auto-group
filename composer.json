@@ -25,7 +25,9 @@
         "topthink/think-orm": "^2.0",
         "topthink/think-filesystem": "^1.0",
         "guzzlehttp/guzzle": "^7.10",
-        "fukuball/jieba-php": "^0.34.0"
+        "fukuball/jieba-php": "^0.34.0",
+        "topthink/think-queue": "^3.0",
+        "qixiangyun/sdk": "dev-master"
     },
     "require-dev": {
         "symfony/var-dumper": "^4.2",

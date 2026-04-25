@@ -4,7 +4,7 @@ declare(strict_types=1);
 namespace app\middleware;
 
 use app\service\LogService;
-use think\Request;
+use think\Request; 
 
 /**
  * API 简易 Token 鉴权中间件

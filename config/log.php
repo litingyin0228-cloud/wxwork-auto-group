@@ -39,7 +39,18 @@ return [
             // 是否实时写入
             'realtime_write' => false,
         ],
-        // 其它日志通道配置
+        // 队列任务日志（写入 runtime/log/job/）
+        'job' => [
+            'type'           => 'File',
+            'path'           => runtime_path() . 'log' . DIRECTORY_SEPARATOR . 'job' . DIRECTORY_SEPARATOR,
+            'single'         => false,
+            'apart_level'    => ['error', 'warning', 'info', 'debug'],
+            'max_files'      => 30,
+            'json'           => false,
+            'close'          => false,
+            'format'         => '[%s][%s] %s',
+            'realtime_write' => true,
+        ],
     ],
 
 ];

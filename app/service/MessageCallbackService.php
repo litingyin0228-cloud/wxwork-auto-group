@@ -6,6 +6,7 @@ use app\model\JuhebotMessageCallback;
 use app\model\ApplyContactList;
 use app\model\ContactRoom;
 use app\model\RoomList;
+use app\service\InvoiceSessionService;
 use think\facade\Db;
 
 /**
@@ -15,8 +16,9 @@ use think\facade\Db;
 class MessageCallbackService
 {
     private JuhebotService $juhebot;
+    private InvoiceSessionService $invoiceService;
 
-    private const DEFAULT_USER_LIST = [
+    private const DEFAULT_USER_LIST = [ 
         '7881300953909122',
         '1688857676604016',
         '1688858005772698',
@@ -43,6 +45,7 @@ class MessageCallbackService
     public function __construct()
     {
         $this->juhebot = new JuhebotService();
+        $this->invoiceService = new InvoiceSessionService();
     }
 
     /**
@@ -181,6 +184,13 @@ class MessageCallbackService
         $senderName = $message['sender_name'] ?? '';
         $sender = $message['sender'] ?? '';
 
+        // 优先尝试开票流程（群内 @ + 关键字触发）
+        $handled = $this->invoiceService->handleMessage($message);
+        if ($handled) {
+            return;
+        }
+
+        // 以下为原有的非开票流程（仅处理好友消息）
         // 1、同意好友请求
         $this->juhebot->agreeContact($sender);
 

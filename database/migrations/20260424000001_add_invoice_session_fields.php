@@ -1,0 +1,17 @@
+-- 扩展 invoice_session 表字段（MySQL DDL）
+-- 对应最新 CREATE TABLE wxwork_invoice_session
+-- 如表已通过上方 CREATE TABLE 创建，本 SQL 无需执行
+
+-- -- 回滚 SQL（DROP 版）--
+-- ALTER TABLE `invoice_session`
+--   DROP COLUMN `company_name`,
+--   DROP COLUMN `is_natural_person`,
+--   DROP COLUMN `invoice_type_label`,
+--   DROP COLUMN `title_type`,
+--   DROP COLUMN `tax_addr`,
+--   DROP COLUMN `tax_phone`,
+--   DROP COLUMN `tax_bank`,
+--   DROP COLUMN `tax_account`,
+--   DROP COLUMN `next_action`,
+--   DROP COLUMN `retry_count`,
+--   DROP COLUMN `items`;

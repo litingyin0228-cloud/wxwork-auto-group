@@ -5,6 +5,7 @@ use app\BaseController;
 use app\model\ApplyContactList;
 use app\model\ContactRoom;
 use app\model\LabelLog;
+use app\service\InvoiceSessionService;
 use app\service\JuhebotService;
 use app\service\LogService;
 use app\service\WxWorkService;
@@ -32,6 +33,16 @@ class Index extends BaseController
     private const CORP_ID = "1970324956094061";
 
     private ?JuhebotService $juhebot = null;
+
+    private InvoiceSessionService $invoiceService;
+
+    public function getInvoiceService(): InvoiceSessionService
+    {
+        if ($this->invoiceService === null) {
+            $this->invoiceService = new InvoiceSessionService();
+        }
+        return $this->invoiceService;
+    }
 
     /**
      * 获取 JuhebotService 单例
@@ -154,11 +165,12 @@ class Index extends BaseController
                 'updated_at'    => date('Y-m-d H:i:s'),
             ]);
 
-            if ($result) {
+            if ($result) {                           
                 return json([
                     'code'    => 0,
                     'message' => '消息处理成功',
                 ]);
+
             } else {
                 LogService::error([
                     'tag'     => 'JuhebotCallback',

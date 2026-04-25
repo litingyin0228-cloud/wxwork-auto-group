@@ -6,6 +6,7 @@ namespace app\listener;
 use app\model\ApplyContactList;
 use app\model\GroupChatLog;
 use app\model\Keywords;
+use app\service\InvoiceSessionService;
 use app\service\JuhebotService;
 use app\service\LogService;
 use Fukuball\Jieba\Finalseg;
@@ -54,6 +55,8 @@ class RoomCreated
     const NOTIFY_TYPE_ADMIN_TIPS_NOTIFY = 573;             // 管理员发消息通知
 
     private static ?JuhebotService $juhebotService = null;
+
+    private static ?InvoiceSessionService $invoiceService = null;
     /**
      * 获取 JuhebotService 单例
      *
@@ -113,7 +116,7 @@ class RoomCreated
                         return;
                     }
                     // 处理普通消息
-                    $this->handleNormalMessage($data);
+                    $this->handleNormalMessage($data);// 处理普通消息
                     break;
                 default:
                     break;
@@ -250,8 +253,8 @@ class RoomCreated
         // $content = preg_replace('/@[^\s]+/s', '', $content);
         LogService::info([
             'tag'     => 'RoomCreated',
-            'message' => '截取掉用户名称后的内容',
-            'data'    => $content,
+            'message' => 'data内容：',
+            'data'    => $data,
         ]);
 
         $words = Jieba::cut($content); // 分词
@@ -273,12 +276,29 @@ class RoomCreated
         }
         if ($is_trigger) {
             // 根据热词库中的内容进行回复
-            $conversationId = 'R:'.$roomId;
-            // $this->getJuhebot()->sendText("R:".$roomId, "#你好我是群智能助手，欢迎使用一键零申报，您的请求已收到，请稍后查看结果。");
-            $this->getJuhebot()->sendWeApp($conversationId);
-            // 
+            $conversationId = 'R:'.$roomId;            
+            // $this->getJuhebot()->sendWeApp($conversationId);            
         } else {
             // $this->getJuhebot()->sendText("R:".$roomId, "#你好我是群智能助手，欢迎使用一键零申报，这个技能我还没有学会。");
+           
         }
+        $message = [
+            'msg_id'       => time(),
+            'room_id'      => $roomId,
+            'sender'       => $sender,
+            'sender_name'  => $senderName,
+            'content'      => $content,
+            'at_list'      => $data['at_list'],
+            'notify_type'  => self::NOTIFY_TYPE_NEW_MSG,
+        ];
+        self::getInvoiceService()->handleMessage($message);
+    }
+
+    private static function getInvoiceService(): InvoiceSessionService
+    {
+        if (self::$invoiceService === null) {
+            self::$invoiceService = new InvoiceSessionService();
+        }
+        return self::$invoiceService;
     }
 }

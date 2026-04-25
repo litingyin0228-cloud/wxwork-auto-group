@@ -19,6 +19,14 @@ Route::get('get_add_contact_way_er_code', 'Index/getAddContactWayErCode');
 Route::get('admin/health',     'AdminController/health');
 Route::get('rpc/health', 'RpcController/health');
 
+// ─── 开票回调路由（外部回调，无需 Token 鉴权）───────────────────────
+Route::post('invoice/message', 'InvoiceController/message');
+Route::get('invoice/status',   'InvoiceController/status');
+Route::post('invoice/cancel',  'InvoiceController/cancel'); 
+
+// ─── 队列测试接口 ────────────────────────────────────────────
+Route::get('queue/test', 'QueueTestController/index'); 
+
 // ─── 需要 Token 鉴权的业务接口 ──────────────────────────────────
 Route::group(function () {
 
