@@ -4,8 +4,10 @@ declare(strict_types=1);
 namespace app\job;
 
 use app\model\InvoiceSession;
+use app\model\InvoiceMessage;
 use app\service\JuhebotService;
 use app\service\LogService;
+use think\facade\Db;
 use think\facade\Queue;
 use think\queue\Job;
 
@@ -30,6 +32,8 @@ class InvoiceJob
         InvoiceSession::ACTION_WAIT_RESULT          => 'queueActionWaitResult',
         InvoiceSession::ACTION_NOTIFY_RESULT        => 'queueActionNotifyResult',
     ];
+
+    private const USER_TIMEOUT_SECONDS = 600; // 10分钟无用户响应自动取消
 
     public function __construct()
     {
@@ -70,6 +74,18 @@ class InvoiceJob
         }
 
         $action = $session->next_action;
+
+        if (!$this->checkUserTimeout($session)) {
+            $this->logInfo('用户超时未回复，自动取消会话', [
+                'session_id' => $sessionId,
+                'next_action' => $action,
+            ]);
+            $this->sendText($session, "您超过10分钟未回复，开票请求已自动取消，有需要请重新发起。");
+            $session->markCancelled();
+            $job->delete();
+            return;
+        }
+
         $method = self::ACTION_METHODS[$action] ?? null;
 
         if ($method === null || !method_exists($this, $method)) {
@@ -89,6 +105,70 @@ class InvoiceJob
         }
     }
 
+    /**
+     * 检测是否已认证
+     *
+     * @param InvoiceSession $session
+     * @return bool
+     */
+    private function checkCompanyCertified(InvoiceSession $session): bool {
+        $org_id = $session->org_id;
+        if ($org_id === null || $org_id === '') {
+            return false;
+        }
+        $org = Db::table('tax_org')->where('tax_id', $org_id)->find();
+        if ($org === null) {
+            return false;
+        }
+        return $org['is_auth'] && $org['is_person_auth'];
+    }
+
+    /**
+     * 检查是否VIP
+     *
+     * @param InvoiceSession $session
+     * @return bool
+     */
+    private function checkCompanyVip(InvoiceSession $session): bool {
+        $org_id = $session->org_id;
+        if ($org_id === null || $org_id === '') {
+            return false;
+        }
+        $org_vip = Db::table('tax_org_invoice_vip')->where('tax_id', $org_id)
+        ->where("expired_time", ">", date("Y-m-d H:i:s"))
+        ->find();
+        if (empty($org_vip)) {
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * 检查用户是否超时未回复
+     *
+     * @param InvoiceSession $session
+     * @return bool true=未超时（继续执行），false=已超时（需取消）
+     */
+    private function checkUserTimeout(InvoiceSession $session): bool
+    {
+        $lastMsgId = $session->latest_msg_id;
+        if ($lastMsgId === null || $lastMsgId === '') {
+            return true;
+        }
+
+        $lastMsg = InvoiceMessage::where('msg_id', $lastMsgId)->find();
+        if ($lastMsg === null) {
+            return true;
+        }
+
+        $lastTime = is_string($lastMsg->created_at) ? strtotime($lastMsg->created_at) : $lastMsg->created_at;
+        if ($lastTime === false) {
+            return true;
+        }
+
+        return (time() - $lastTime) < self::USER_TIMEOUT_SECONDS;
+    }
+
     // ─── 对话步骤处理方法（由 next_action 驱动） ─────────────────────
 
     /**
@@ -99,8 +179,18 @@ class InvoiceJob
     protected function queueActionSendAck(InvoiceSession $session, Job $job): void
     {
         $this->logInfo('==> 步骤1：发送收到确认：'.$session->next_action, ['session_id' => $session->id]);
-
-        $this->sendText($session, "收到！这就为您安排开票，我先确认下您的开票信息，您可持续补充，请稍等~");
+        // 需要检查当前企业是否已认证、是否已开通开票VIP如果检测不通过就结束流程
+        $isCertified = $this->checkCompanyCertified($session);
+        $isVip = $this->checkCompanyVip($session);
+        if (!$isCertified || !$isVip) {            
+            $session->markCancelled();
+            //温馨提示：
+    // 您的企业【贵州老瓦匠科技服务有限责任公司】暂未认证或未开通AI一键开票。建议您先完成认证并开通VIP，即可正常使用开票功能。
+            $this->sendText($session, "您的企业【{$session->org_name}】未认证或未开通开票VIP，无法进行开票。");
+            $job->delete();
+            return;
+        }
+        $this->sendText($session, "收到{$session->org_name}！这就为您安排开票，我先确认下您的开票信息，您可持续补充，请稍等~");
         
         $session->next_action = InvoiceSession::ACTION_PARSE_AND_CONFIRM;
         $session->save();
@@ -155,7 +245,7 @@ class InvoiceJob
     protected function queueActionSubmitInvoice(InvoiceSession $session, Job $job): void
     {
         $this->logInfo('==> 步骤3：提交开票申请', ['session_id' => $session->id]);
-        if ($session->company_name === '' || $session->tax_no === '' || $session->amount === 0 || empty($session->items)) {
+        if ($session->company_name === '' || $session->tax_no === '' || $session->amount <= 0 || $session->items == "[]" || $session->items === "{}" || $session->items === null) {
             $this->sendText($session, "开票信息不完整，请补充完整后重新确认开票。");
 
             $session->next_action = InvoiceSession::ACTION_PARSE_AND_CONFIRM;
@@ -321,7 +411,9 @@ class InvoiceJob
 
         // ─── 提取公司名称 ─────────────────────────────────────────
         // 支持：公司：xxx / 抬头：xxx / 企业名称：xxx / 企业：xxx
-        if (preg_match('/(?:公司|抬头|企业名称|企业|名称|name|company)[：:\s]*([^\s\d]{2,50})/u', $text, $m)) {
+        if (preg_match('/(?:公司|抬头|企业名称|企业|名称)[：:\s]*([^\s\d]{2,50})/u', $text, $m)) {
+            $data['company_name'] = trim($m[1]);
+        }  elseif (preg_match('/(?:公司|抬头|企业名称|企业|名称) ?([^\s\d]{2,50})/u', $text, $m)) {
             $data['company_name'] = trim($m[1]);
         }
 
@@ -334,7 +426,9 @@ class InvoiceJob
 
         // ─── 提取税号 ─────────────────────────────────────────────
         // 15/17/18/20位数字字母组合
-        if (preg_match('/(?:税号|tax|no|n_tax)[：:\s]*([0-9a-z]{15,24})/i', $text, $m)) {
+        if (preg_match('/(?:税号|营业执照编号|编号|营业执照)[：:\s]*([0-9a-z]{15,24})/i', $text, $m)) {
+            $data['tax_no'] = $m[1];
+        } elseif (preg_match('/(?:税号|营业执照编号|编号|营业执照) ?([0-9a-z]{15,24})/i', $text, $m)) {
             $data['tax_no'] = $m[1];
         } elseif (preg_match('/[0-9a-z]{15,24}/i', $text, $m)) {
             // 没有前缀时，如果文本中有18位码，也当作税号
@@ -358,19 +452,21 @@ class InvoiceJob
         // ─── 提取金额 ─────────────────────────────────────────────
         // 支持：金额：xxx / 钱：xxx / xxx元 / xxx圆
         $amountFound = false;
-        if (preg_match('/(?:金额|money|总额|钱|total)[：:\s]*(\d+(?:\.\d{1,2})?)/', $text, $m)) {
+        if (preg_match('/(?:金额|开票金额|总金额)[：:\s]*(\d+(?:\.\d{1,2})?)/', $text, $m)) {
             $data['amount'] = round((float)$m[1], 2);
             $amountFound = true;
         } elseif (preg_match('/(\d+(?:\.\d{1,2})?)\s*(?:元|圆|¥|\$)/u', $text, $m)) {
             $data['amount'] = round((float)$m[1], 2);
             $amountFound = true;
+        } elseif (preg_match('/(?:金额|开票金额|总金额) ?(\d+(?:\.\d{1,2})?)/', $text, $m)) {
+            $data['amount'] = round((float)$m[1], 2);
+            $amountFound = true;
         }
 
-        // ─── 提取项目明细 ─────────────────────────────────────────
-        // 支持：项目：xxx / 服务项目：xxx / item：xxx
-        // 单行格式：[关键词] xxx 或 [关键词]xxx
+        // 支持：项目：xxx / 项目 xxx / 服务项目：xxx
+        // 允许关键词后跟冒号+空格或纯空格
         if (preg_match_all(
-            '/(?:项目|服务项目|item|服务)[：:\s]*([^\s]{1,50})/ui',
+            '/(?:项目|服务项目|服务名称|服务)[：:\s]*([^\n]{1,50})/ui',
             $text,
             $matches,
             PREG_SET_ORDER
@@ -394,7 +490,7 @@ class InvoiceJob
         }
 
         // 如果提取到了项目但没有金额，尝试用项目后的数字作为金额
-        if (empty($data['items']) && preg_match('/(?:项目|服务)[：:\s]*([^\s]{1,50})[\s]+(\d+(?:\.\d{1,2})?)/u', $text, $m)) {
+        if (empty($data['items']) && preg_match('/(?:项目|服务项目|服务名称|服务)[：:\s]*([^\s]{1,50})[\s]+(\d+(?:\.\d{1,2})?)/u', $text, $m)) {
             $data['amount'] = round((float)$m[2], 2);
             $data['items'][] = [
                 'name'   => trim($m[1]),
@@ -538,25 +634,64 @@ class InvoiceJob
      */
     protected function submitToInvoiceApi(InvoiceSession $session): array
     {
-        // TODO: 调用真实开票服务
-        // $invoiceApi = app(InvoiceApiService::class);
-        // return $invoiceApi->create([...]);
+        $invoiceApiUrl = "https://shenbao.guiyangyuanqu.cn/api/open/invoice/flow-by-org-id";
 
-        $this->logInfo('模拟开票接口调用', [
-            'session_id'   => $session->id,
-            'company_name' => $session->company_name,
-            'tax_no'       => $session->tax_no,
-            'amount'       => $session->amount,
-            'items'        => $session->items,
-        ]);
+        if (empty($invoiceApiUrl)) {
+            $this->logError('INVOICE_API_URL 未配置');
+            return [
+                'success' => false,
+                'invoice_id' => '',
+                'message' => '开票接口未配置',
+            ];
+        }
 
-        $invoiceId = 'INV' . date('YmdHis') . str_pad((string)$session->id, 6, '0', STR_PAD_LEFT);
+        try {
+            $client = new \GuzzleHttp\Client([
+                'timeout' => 30,
+                'headers' => [
+                    'Content-Type' => 'application/json',
+                ],
+            ]);
 
-        return [
-            'success'    => true,
-            'invoice_id' => $invoiceId,
-            'message'    => '开票申请已提交',
-        ];
+            $response = $client->post($invoiceApiUrl, [
+                'json' => [
+                    'session_id' => $session->id,
+                    'phone'=>"18685193758"//TODO 手机号
+                ],
+            ]);
+
+            $body = json_decode((string)$response->getBody(), true);
+
+            $this->logInfo('开票接口响应', [
+                'session_id' => $session->id,
+                'response' => $body,
+            ]);
+
+            if (isset($body['code']) && $body['code'] == 200) {
+                return [
+                    'success' => true,
+                    'invoice_id' => $body['data']['id'] ?? '',
+                    'message' => $body['message'] ?? '开票申请已提交',
+                ];
+            }
+
+            return [
+                'success' => false,
+                'invoice_id' => '',
+                'message' => $body['message'] ?? '开票申请提交失败',
+            ];
+        } catch (\Exception $e) {
+            $this->logError('开票接口调用异常', [
+                'session_id' => $session->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return [
+                'success' => false,
+                'invoice_id' => '',
+                'message' => '开票接口调用失败: ' . $e->getMessage(),
+            ];
+        }
     }
 
     /**
@@ -564,22 +699,23 @@ class InvoiceJob
      *
      * TODO: 替换为真实结果查询
      *
-     * @param string $invoiceId
+     * @param int $invoiceId
      * @return array ['done' => bool, 'success' => bool, 'file_url' => string, 'invoice_no' => string, 'message' => string]
      */
-    protected function queryInvoiceResult(string $invoiceId): array
+    protected function queryInvoiceResult(int $invoiceId): array
     {
         // TODO: 调用真实结果查询接口
         // $invoiceApi = app(InvoiceApiService::class);
         // return $invoiceApi->query($invoiceId);
+        $invoiceInfo = Db::name('tax_qdfp_invoce_result')->where('id', $invoiceId)->find();
 
-        $this->logInfo('模拟查询开票结果', ['invoice_id' => $invoiceId]);
+        $this->logInfo('模拟查询开票结果', ['invoiceInfo' => $invoiceInfo]);
 
         return [
             'done'       => true,
             'success'    => true,
-            'invoice_no' => 'FP' . date('Ymd') . '0001',
-            'file_url'   => "https://qxy-oss-invoice.oss-cn-beijing.aliyuncs.com/einv/2026/01/b39ea/89388/9f497/b92ce/12278/f38a389/26522000000080275096.pdf",
+            'invoice_no' => $invoiceInfo['fphm'] ?? '',
+            'file_url'   => $invoiceInfo['pdf_url'] ?? '',
             'message'    => '开票成功',
         ];
     }

@@ -172,25 +172,26 @@ class InvoiceSessionService
 
             // 以下动作由队列 Job 驱动，用户在中途发消息 → 统一引导等待
             case InvoiceSession::ACTION_SEND_ACKNOWLEDGING:
+                $session->updateLatestMsgId($msgId);
                 $this->replyToRoom($session->room_id, "收到，请稍等~");
                 return true;
 
             case InvoiceSession::ACTION_PARSE_AND_CONFIRM:
+                $session->updateLatestMsgId($msgId);
                 $stepData = is_array($session->step_data) ? $session->step_data : (array)$session->step_data;
                 $content = $stepData['parsed_content'] ?? '';
                 if ($content === '') {
                     $content = "正在解析您的开票信息，请稍等，马上就好~";
                 }
-                $res = $this->applyUserModification($session, $content);
-                
+                $this->applyUserModification($session, $content);
                 return true;
 
             case InvoiceSession::ACTION_SUBMIT_INVOICE:
-                // $this->replyToRoom($session->room_id, "正在提交开票申请，请稍等~");
+                $session->updateLatestMsgId($msgId);
                 return true;
 
             case InvoiceSession::ACTION_WAIT_RESULT:
-                // $this->replyToRoom($session->room_id, "正在等待开票结果，请稍等片刻~");
+                $session->updateLatestMsgId($msgId);
                 return true;
 
             // notify_result → 流程已结束（但 session 可能还没完全清理），忽略新消息
@@ -199,6 +200,7 @@ class InvoiceSessionService
                 return true;
 
             default:
+                $session->updateLatestMsgId($msgId);
                 LogService::warning([
                     'tag'    => 'InvoiceSession',
                     'message' => '未处理的 next_action，忽略消息',
@@ -222,6 +224,8 @@ class InvoiceSessionService
         string $userName,
         string $msgId
     ): bool {
+        $session->updateLatestMsgId($msgId);
+
         InvoiceMessage::logUser($session->id, $msgId, $userId, $userName, $content, 'user_reply');
 
         $lowerContent = mb_strtolower(trim($content));
@@ -291,6 +295,7 @@ class InvoiceSessionService
      */
     private function handleCancel(InvoiceSession $session, string $userId, string $userName, string $content, string $msgId): bool
     {
+        $session->updateLatestMsgId($msgId);
         InvoiceMessage::logUser($session->id, $msgId, $userId, $userName, $content, 'cancel');
         $session->markCancelled();
         $this->replyToRoom($session->room_id, "已取消开票，有需要随时@我。");

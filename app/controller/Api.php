@@ -23,9 +23,14 @@ class Api extends BaseController
     private const FILE_TYPE_IMAGE = 2;
     private const FILE_TYPE_FILE  = 5;
     public function testRedis(){
+        $lastSeq = ApplyContactList::order('id', 'desc')->limit(1)->value('seq');
+        dd($lastSeq);
         LogService::error([
-            'tag'     => 'UpdateRoomName',
-            'message' => '更新房间名称异常',            
+            'tag'     => 'testRedis',
+            'message' => 'testRedis',
+            'data'    => [
+                'last_seq' => $lastSeq,
+            ],
         ], 'job');
     }
 
