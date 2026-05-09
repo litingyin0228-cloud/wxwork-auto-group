@@ -280,6 +280,7 @@ class InvoiceJob
             }
         } catch (\Throwable $e) {
             $session->markError($e->getMessage());
+            $session->markCancelled();
             $this->notifyError($session, $e->getMessage());
         }
 
@@ -617,8 +618,9 @@ class InvoiceJob
         try {
             $this->juhebot->sendText(
                 'R:' . $session->room_id,
-                "开票处理出现异常：{$errorMsg}\n请稍后重试或联系客服。"
+                "开票处理出现异常：{$errorMsg}\n请登录小程序查看开票状态。"
             );
+            $this->juhebot->sendWeApp('R:' . $session->room_id);
         } catch (\Throwable $e) {
             $this->logError('发送错误通知失败', ['error' => $e->getMessage()]);
         }
